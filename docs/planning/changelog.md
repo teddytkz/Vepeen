@@ -2,6 +2,12 @@
 
 ### Changed
 
+- [2026-07-23] **quit-disconnect** Minor: auto-disconnect VPN on tray Quit.
+  - `internal/ui/main_window.go` — `NewMainWindow` now returns `(fyne.Window, func())`. The second value is a `disconnectAndQuit` closure that: checks the controller's current status, fires `mgr.DisconnectFull` with a 5 s timeout if connected (best-effort, does not block beyond the timeout), then calls `a.Quit()`. No new imports.
+  - `internal/ui/tray_windows.go` — `SetupTray` signature changed to `SetupTray(a fyne.App, w fyne.Window, onQuit func())`. The "Quit" menu item calls `onQuit()` instead of `a.Quit()`.
+  - `cmd/vepeen/main.go` — call site updated: `w, onQuit := ui.NewMainWindow(a)` → `ui.SetupTray(a, w, onQuit)`.
+  - No UI updates during quit path; window may already be hidden to tray.
+
 - [2026-07-23] **i18n-en** — Translated ALL Indonesian-language string literals and comments to English across the entire codebase. Pure text/localization change — zero logic changes. Files updated:
   - `internal/route/parse.go` — 6 error/format strings (ParseError messages, ResolveRoutes errors)
   - `internal/route/parse_test.go` — assertion strings updated to match new English messages

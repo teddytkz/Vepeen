@@ -14,7 +14,7 @@ import (
 //
 // Left-clicking the tray icon shows the window (via SetSystemTrayWindow).
 // Right-clicking shows the menu with "Show" and "Quit".
-func SetupTray(a fyne.App, w fyne.Window) {
+func SetupTray(a fyne.App, w fyne.Window, onQuit func()) {
 	desk, ok := a.(desktop.App)
 	if !ok {
 		// Not running as a desktop app (e.g. test driver) — skip tray setup.
@@ -36,7 +36,7 @@ func SetupTray(a fyne.App, w fyne.Window) {
 		}),
 		fyne.NewMenuItemSeparator(),
 		fyne.NewMenuItem("Quit", func() {
-			a.Quit()
+			onQuit()
 		}),
 	)
 	desk.SetSystemTrayMenu(menu)

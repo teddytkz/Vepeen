@@ -25,7 +25,9 @@ import (
 const maxLogLines = 300
 
 // NewMainWindow builds the L2TP/IPsec split-tunnel main window.
-func NewMainWindow(a fyne.App) fyne.Window {
+// It returns the window and a disconnectAndQuit closure that disconnects the
+// VPN (best-effort, 5 s timeout) then calls a.Quit().
+func NewMainWindow(a fyne.App) (fyne.Window, func()) {
 	w := a.NewWindow("Vepeen")
 	w.Resize(fyne.NewSize(960, 600))
 
@@ -38,7 +40,25 @@ func NewMainWindow(a fyne.App) fyne.Window {
 	// window at the work-area center before the first frame is composited. This
 	// avoids the teleport blink from the old deferred goroutine.
 	ctrl.loadInitial()
-	return w
+
+	// disconnectAndQuit disconnects the VPN (best-effort, 5 s) then quits.
+	disconnectAndQuit := func() {
+		name := ctrl.profileName()
+		if name != "" {
+			done := make(chan struct{})
+			go func() {
+				defer close(done)
+				_ = ctrl.mgr.DisconnectFull(name)
+			}()
+			select {
+			case <-done:
+			case <-time.After(5 * time.Second):
+			}
+		}
+		a.Quit()
+	}
+
+	return w, disconnectAndQuit
 }
 
 type controller struct {
@@ -428,7 +448,7 @@ func (c *controller) startTraffic(name string) {
 					prevRx, prevTx = rx, tx
 				}
 
-				hostText := "No active TCP connections through the VPN.\n(Open a website/app within the route range; ping/ICMP is not shown.)"
+				hostText := "No active TCP connections through the VPN"
 				if conns, cerr := vpn.ActiveConnections(name); cerr == nil && len(conns) > 0 {
 					var b strings.Builder
 					for _, ac := range conns {
