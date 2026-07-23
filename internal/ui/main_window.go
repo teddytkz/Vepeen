@@ -33,10 +33,10 @@ func NewMainWindow(a fyne.App) fyne.Window {
 	ctrl.win = w
 	// Window has no SetMinSize in Fyne v2.8; enforce via content MinSize wrapper.
 	w.SetContent(newMinSizeWrap(ctrl.build(), fyne.NewSize(900, 560)))
-	// Center AFTER content is set so the final window size is used for centering.
-	// Use true work-area centering (excludes the taskbar) on Windows via a
-	// build-tagged helper; falls back to CenterOnScreen if the API call fails.
-	centerOnWorkArea(w)
+	// Centering is now performed synchronously at show time by ui.ShowCentered
+	// (called from main.go after NewMainWindow returns), which positions the
+	// window at the work-area center before the first frame is composited. This
+	// avoids the teleport blink from the old deferred goroutine.
 	ctrl.loadInitial()
 	return w
 }

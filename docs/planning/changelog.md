@@ -1,5 +1,15 @@
 ## [Unreleased]
 
+### Fixed
+
+- [2026-07-23] **fix-013** Medium: startup window flicker/blink ("kedipan apps") — `docs/planning/fix-013-startup-flicker.md`
+  - **Rank 1 (primary):** deferred `centerOnWorkArea` goroutine (`internal/ui/window_pos_windows.go:59-76`) shows window at 0,0 then teleports to center → blink. Fix (Frontend): replaced with exported `ShowCentered(w fyne.Window)` that calls `w.Show()` then positions synchronously via `driver.NativeWindow.RunNative` (HWND valid after `Show()`, before `a.Run()`); drops `SWP_NOACTIVATE` (uses `SWP_NOSIZE|SWP_NOZORDER|SWP_SHOWWINDOW`); hides→positions→shows inside the same callback to avoid any 0,0 frame; keeps `SPI_GETWORKAREA` work-area centering; falls back to `CenterOnScreen()`. `main.go` now calls `ui.ShowCentered(w)` + `a.Run()` instead of `w.ShowAndRun()`. Non-Windows stub `window_pos_other.go` provides `ShowCentered` (`CenterOnScreen()` + `Show()`).
+  - **Rank 2 (secondary):** GLFW/OpenGL white first-frame flash. Fix (Frontend): apply `WS_EX_COMPOSITED` (GWL_EXSTYLE=-20) and `WS_CLIPCHILDREN` (GWL_STYLE=-16) at the show-time hook; add Windows app manifest `vepeen.exe.manifest` (Per-Monitor v2 DPI via `dpiAwareness`, `uiAccess=false`) compiled to committed `cmd/vepeen/rsrc.syso` via `rsrc`; `build.ps1` regenerates `.syso` if missing. Verified: `bin/vepeen.exe` subsystem=2 (GUI, no console) and manifest strings embedded.
+  - **Rank 3 (secondary):** staged Resize→SetContent→center resolved naturally by show-time positioning (reads actual rect).
+  - **Rank 4 (minor, optional):** move synchronous `config.LoadStored()` in `loadInitial()` (`main_window.go:155-220`) into a `fyne.Do` goroutine to paint sooner.
+  - Constraints: no console window (`-H windowsgui` preserved); work-area centering kept; theme/app ID/`FyneApp.toml`/`fyne.Do`/Indonesian labels untouched; non-Windows stubs compile; no blank-window regression.
+  - Pipeline: Frontend Developer → Debugger/Reviewer → Documentation
+
 ### Changed
 
 - [2026-07-23] **fix-012** Medium: replace PowerShell/exec in periodic tickers with Win32 syscalls (`docs/planning/fix-012-win32-ticker-perf.md`)

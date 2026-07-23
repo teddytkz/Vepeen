@@ -28,7 +28,10 @@ func main() {
 	a := app.NewWithID("com.vepeen.app")
 	a.Settings().SetTheme(ui.NewTheme())
 	w := ui.NewMainWindow(a)
-	w.ShowAndRun()
+	// ShowCentered centers the window (full monitor) and shows it before the
+	// first frame, eliminating the startup blink. a.Run() only starts the loop.
+	ui.ShowCentered(w)
+	a.Run()
 }
 
 func startupLogPath() string {
