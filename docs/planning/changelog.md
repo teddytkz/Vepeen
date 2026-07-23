@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+### Changed
+
+- [2026-07-23] **prd-vpn-win-package** Medium: refactor — group all Windows-only VPN code into a new `internal/vpn/win` package (`package win`); `internal/vpn` becomes a thin platform-neutral facade that re-exports the OS-specific symbols (delegating to `win` on Windows, `stub_other.go` elsewhere). Moves 9 files: `status_windows.go`, `connections_windows.go`, `dial_windows.go`, `disconnectall_windows.go`, `natt_windows.go`, `netapi_windows.go`, `powershell_windows.go`, `profile_windows.go`, `traffic_windows.go` (+ their 2 tests). `Manager.NewManager()` keeps referencing `vpn.`-level names (no `win` import, no build-tag change). `internal/ui` and `cmd/vepeen` require zero edits. No behavior/string changes. `psQuote`/`runPowerShell` dedup deferred to follow-up. (`docs/planning/prd-vpn-win-package.md`)
+
 ### Fixed
 
 - [2026-07-23] **fix-013** Medium: startup window flicker/blink ("kedipan apps") — `docs/planning/fix-013-startup-flicker.md`

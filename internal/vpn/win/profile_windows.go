@@ -1,23 +1,25 @@
 //go:build windows
 
-package vpn
+package win
 
 import (
 	"fmt"
 	"strings"
+
+	"vepeen/internal/vpn/shared"
 )
 
 // ListProfiles enumerates all Windows VPN connections via Get-VpnConnection.
 // Returns an empty (non-nil) slice and no error when none exist.
-func ListProfiles() ([]ProfileSummary, error) {
+func ListProfiles() ([]shared.ProfileSummary, error) {
 	script := `Get-VpnConnection -ErrorAction SilentlyContinue | ForEach-Object {
         "$($_.Name)|$($_.ServerAddress)|$($_.TunnelType)|$([int]$_.SplitTunneling)|$($_.ConnectionStatus)"
     }`
 	out, err := runPowerShell(script)
 	if err != nil {
-		return nil, MapExecError("ListProfiles", err, out)
+		return nil, shared.MapExecError("ListProfiles", err, out)
 	}
-	var res []ProfileSummary
+	var res []shared.ProfileSummary
 	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
@@ -28,7 +30,7 @@ func ListProfiles() ([]ProfileSummary, error) {
 			continue
 		}
 		st := mapConnectionStatus(strings.TrimSpace(parts[4]))
-		res = append(res, ProfileSummary{
+		res = append(res, shared.ProfileSummary{
 			Name:           strings.TrimSpace(parts[0]),
 			ServerAddress:  strings.TrimSpace(parts[1]),
 			TunnelType:     strings.TrimSpace(parts[2]),
@@ -37,7 +39,7 @@ func ListProfiles() ([]ProfileSummary, error) {
 		})
 	}
 	if res == nil {
-		res = []ProfileSummary{}
+		res = []shared.ProfileSummary{}
 	}
 	return res, nil
 }
@@ -49,7 +51,7 @@ func EnforceSplitTunnel(name string) (string, error) {
 	script := enforceSplitTunnelScript(name)
 	out, err := runPowerShell(script)
 	if err != nil {
-		return sanitizeOutput(strings.TrimSpace(out)), err
+		return shared.SanitizeOutput(strings.TrimSpace(out)), err
 	}
 	return strings.TrimSpace(out), nil
 }
@@ -97,14 +99,14 @@ else {
 }`, psQuote(name))
 	out, err := runPowerShell(script)
 	if err != nil {
-		return sanitizeOutput(strings.TrimSpace(out)), err
+		return shared.SanitizeOutput(strings.TrimSpace(out)), err
 	}
 	return strings.TrimSpace(out), nil
 }
 
 // ProfileExists reports whether a per-user VPN connection with the given name exists.
 func ProfileExists(name string) (bool, error) {
-	if err := ValidateName(name); err != nil {
+	if err := shared.ValidateName(name); err != nil {
 		return false, err
 	}
 	script := fmt.Sprintf(
@@ -113,7 +115,7 @@ func ProfileExists(name string) (bool, error) {
 	)
 	out, err := runPowerShell(script)
 	if err != nil {
-		return false, MapExecError("ProfileExists", err, out)
+		return false, shared.MapExecError("ProfileExists", err, out)
 	}
 	return strings.TrimSpace(out) == "1", nil
 }
@@ -121,7 +123,7 @@ func ProfileExists(name string) (bool, error) {
 // EnsureSplitTunneling enables split tunneling on the named Windows VPN
 // profile so only explicitly added routes traverse the tunnel. Best-effort.
 func EnsureSplitTunneling(name string) error {
-	if err := ValidateName(name); err != nil {
+	if err := shared.ValidateName(name); err != nil {
 		return err
 	}
 	script := fmt.Sprintf(`$ErrorActionPreference='Stop'
@@ -134,7 +136,7 @@ if ($c.SplitTunneling) { Write-Output 'already-on' } else {
 }`, psQuote(name))
 	out, err := runPowerShell(script)
 	if err != nil {
-		return MapExecError("EnsureSplitTunneling", err, out)
+		return shared.MapExecError("EnsureSplitTunneling", err, out)
 	}
 	return nil
 }

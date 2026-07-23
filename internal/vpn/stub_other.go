@@ -2,20 +2,20 @@
 
 package vpn
 
-import "fmt"
+import "vepeen/internal/vpn/shared"
 
 func unsupported() error {
-	return newUserError("platform", "Gagal", "Fitur VPN hanya didukung di Windows.")
+	return shared.NewUserError("platform", "Gagal", "Fitur VPN hanya didukung di Windows.")
 }
 
 // ListProfiles is not supported outside Windows.
-func ListProfiles() ([]ProfileSummary, error) { return nil, unsupported() }
+func ListProfiles() ([]shared.ProfileSummary, error) { return nil, unsupported() }
 
 // EnsureNATRegistry is a no-op outside Windows (NAT-T is Windows-specific).
-func EnsureNATRegistry() (NATResult, error) { return NATOK, nil }
+func EnsureNATRegistry() (shared.NATResult, error) { return shared.NATOK, nil }
 
 // Connect is not supported outside Windows.
-func Connect(p ConnectParams) error { return unsupported() }
+func Connect(p shared.ConnectParams) error { return unsupported() }
 
 // Disconnect is not supported outside Windows.
 func Disconnect(name string) error { return unsupported() }
@@ -26,8 +26,8 @@ func DisconnectAllExcept(exceptName string) ([]string, error) {
 }
 
 // QueryStatus is not supported outside Windows.
-func QueryStatus(name string) (ConnStatus, error) {
-	return StatusUnknown, unsupported()
+func QueryStatus(name string) (shared.ConnStatus, error) {
+	return shared.StatusUnknown, unsupported()
 }
 
 // ProfileExists is not supported outside Windows.
@@ -55,6 +55,3 @@ func ActiveConnections(name string) ([]ActiveConn, error) { return nil, unsuppor
 
 // PingHost is not supported outside Windows.
 func PingHost(host string, timeoutMs uint32) (uint32, error) { return 0, unsupported() }
-
-// Silence unused import on some toolchains.
-var _ = fmt.Errorf

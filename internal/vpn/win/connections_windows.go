@@ -1,7 +1,6 @@
 //go:build windows
-// +build windows
 
-package vpn
+package win
 
 import (
 	"context"
@@ -13,6 +12,8 @@ import (
 	"unsafe"
 
 	"golang.org/x/sys/windows"
+
+	"vepeen/internal/vpn/shared"
 )
 
 // ActiveConnections returns established TCP connections whose local address
@@ -20,8 +21,8 @@ import (
 // resolved best-effort via reverse DNS with a short timeout (falls back to IP).
 // Returns an empty slice (no error) when the connection is not up or has no
 // established sockets.
-func ActiveConnections(name string) ([]ActiveConn, error) {
-	if err := ValidateName(name); err != nil {
+func ActiveConnections(name string) ([]shared.ActiveConn, error) {
+	if err := shared.ValidateName(name); err != nil {
 		return nil, err
 	}
 
@@ -68,7 +69,7 @@ func ActiveConnections(name string) ([]ActiveConn, error) {
 	rowSize := int(unsafe.Sizeof(mibTcpRowOwnerPid{}))
 	offset := 4
 
-	var res []ActiveConn
+	var res []shared.ActiveConn
 	for i := uint32(0); i < numEntries && offset+rowSize <= len(buf); i++ {
 		row := (*mibTcpRowOwnerPid)(unsafe.Pointer(&buf[offset]))
 		offset += rowSize
@@ -85,7 +86,7 @@ func ActiveConnections(name string) ([]ActiveConn, error) {
 			byte(row.DwRemoteAddr>>24),
 		).String()
 		port := strconv.FormatUint(uint64(ntohs(uint16(row.DwRemotePort))), 10)
-		res = append(res, ActiveConn{
+		res = append(res, shared.ActiveConn{
 			RemoteAddr: ip,
 			RemotePort: port,
 			Hostname:   reverseLookup(ip),

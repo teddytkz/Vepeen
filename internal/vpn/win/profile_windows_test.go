@@ -1,6 +1,6 @@
 //go:build windows
 
-package vpn
+package win
 
 import (
 	"strings"

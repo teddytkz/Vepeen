@@ -1,4 +1,4 @@
-package vpn
+package shared
 
 // NATResult describes the outcome of EnsureNATRegistry.
 type NATResult int
@@ -13,12 +13,12 @@ const (
 )
 
 const (
-	natPolicyAgentKey = `SYSTEM\CurrentControlSet\Services\PolicyAgent`
-	natValueName      = "AssumeUDPEncapsulationContextOnSendRule"
-	natValueTarget    = uint32(2)
+	NatPolicyAgentKey = `SYSTEM\CurrentControlSet\Services\PolicyAgent`
+	NatValueName      = "AssumeUDPEncapsulationContextOnSendRule"
+	NatValueTarget    = uint32(2)
 )
 
-// natValueOK reports whether the registry value enables UDP encapsulation.
-func natValueOK(v uint32) bool {
-	return v == natValueTarget
+// NatValueOK reports whether the registry value enables UDP encapsulation.
+func NatValueOK(v uint32) bool {
+	return v == NatValueTarget
 }

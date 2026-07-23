@@ -1,19 +1,21 @@
 //go:build windows
 
-package vpn
+package win
 
 import (
 	"os/exec"
 	"strings"
 	"syscall"
+
+	"vepeen/internal/vpn/shared"
 )
 
 // Connect dials the VPN via rasdial. Username and Password are optional: when
 // both are empty/whitespace, rasdial uses the Windows-saved credentials; if
 // either is provided, both are required. Password is passed as an argument (OS
 // limitation) and is never logged by this package.
-func Connect(p ConnectParams) error {
-	if err := ValidateName(p.Name); err != nil {
+func Connect(p shared.ConnectParams) error {
+	if err := shared.ValidateName(p.Name); err != nil {
 		return err
 	}
 	user := strings.TrimSpace(p.Username)
@@ -25,7 +27,7 @@ func Connect(p ConnectParams) error {
 		cmd = exec.Command("rasdial.exe", p.Name)
 	} else {
 		if user == "" || pass == "" {
-			return newUserError("validation", "Tidak dapat menghubungkan", "Username dan password wajib diisi bersama-sama.")
+			return shared.NewUserError("validation", "Tidak dapat menghubungkan", "Username dan password wajib diisi bersama-sama.")
 		}
 		cmd = exec.Command("rasdial.exe", p.Name, user, pass)
 	}
@@ -42,7 +44,7 @@ func Connect(p ConnectParams) error {
 	if evaluateRasdialResult(err, text) {
 		return nil
 	}
-	return MapExecError("Connect", err, text)
+	return shared.MapExecError("Connect", err, text)
 }
 
 // evaluateRasdialResult reports whether a rasdial invocation succeeded.
@@ -69,7 +71,7 @@ func evaluateRasdialResult(exitErr error, text string) bool {
 
 // Disconnect hangs up the VPN via rasdial /DISCONNECT.
 func Disconnect(name string) error {
-	if err := ValidateName(name); err != nil {
+	if err := shared.ValidateName(name); err != nil {
 		return err
 	}
 	cmd := exec.Command("rasdial.exe", name, "/DISCONNECT")
@@ -84,7 +86,7 @@ func Disconnect(name string) error {
 			strings.Contains(lower, "no connections") {
 			return nil
 		}
-		return MapExecError("Disconnect", err, text)
+		return shared.MapExecError("Disconnect", err, text)
 	}
 	return nil
 }

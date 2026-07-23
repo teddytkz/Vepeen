@@ -1,4 +1,4 @@
-package vpn
+package shared
 
 // ConnStatus is the high-level connection lifecycle state for UI and domain.
 type ConnStatus string

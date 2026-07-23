@@ -1,4 +1,4 @@
-package vpn
+package shared
 
 import (
 	"errors"
@@ -24,7 +24,10 @@ func (e *UserError) Error() string {
 	return e.Primary + ": " + e.Detail
 }
 
-func newUserError(code, primary, detail string) *UserError {
+// NewUserError builds a sanitized, user-facing error. It is exported so the
+// vpn orchestration layer and platform packages can construct UserErrors
+// without importing implementation details.
+func NewUserError(code, primary, detail string) *UserError {
 	return &UserError{Code: code, Primary: primary, Detail: detail}
 }
 
@@ -42,7 +45,7 @@ func MapExecError(op string, err error, output string) error {
 	if err == nil {
 		return nil
 	}
-	msg := sanitizeOutput(output)
+	msg := SanitizeOutput(output)
 	lower := strings.ToLower(msg + " " + err.Error())
 
 	switch {
@@ -51,11 +54,11 @@ func MapExecError(op string, err error, output string) error {
 		strings.Contains(lower, "elevat") ||
 		strings.Contains(lower, "administrator") ||
 		strings.Contains(lower, "0x80070005"):
-		return newUserError("elevation",
+		return NewUserError("elevation",
 			"Gagal menyiapkan profil",
 			"Mungkin diperlukan hak administrator. Coba jalankan sebagai user biasa dulu; profil per-user lebih disarankan.")
 	case strings.Contains(lower, "734"):
-		return newUserError("ppp",
+		return NewUserError("ppp",
 			"Gagal negosiasi PPP (error 734)",
 			"Server memutus koneksi saat verifikasi. Pastikan username/password benar dan tersimpan di Windows Credential Manager, atau isi kredensial di Vepeen. Periksa juga metode autentikasi (MS-CHAPv2) dan enkripsi di profil Windows.")
 	case strings.Contains(lower, "691") ||
@@ -63,29 +66,29 @@ func MapExecError(op string, err error, output string) error {
 		strings.Contains(lower, "autentikasi") ||
 		strings.Contains(lower, "logon failure") ||
 		strings.Contains(lower, "username or password"):
-		return newUserError("auth",
+		return NewUserError("auth",
 			"Gagal autentikasi",
 			"Periksa username/password atau kebijakan server. PSK tidak ditampilkan.")
 	case strings.Contains(lower, "623") ||
 		strings.Contains(lower, "phone book") ||
 		strings.Contains(lower, "cannot find") && strings.Contains(lower, "connection"):
-		return newUserError("profile",
+		return NewUserError("profile",
 			"Gagal",
 			"Profil VPN tidak ditemukan. Coba Hubungkan lagi untuk membuat profil.")
 	case strings.Contains(lower, "789") ||
 		strings.Contains(lower, "800") ||
 		strings.Contains(lower, "809"):
-		return newUserError("ipsec",
+		return NewUserError("ipsec",
 			"Gagal terhubung (L2TP/IPsec)",
 			"Kesalahan 789/800/809: biasanya karena NAT atau pengaturan IPsec. Vepeen mencoba mengatur registri NAT-T secara otomatis (perlu hak administrator). Pastikan port UDP 500 dan 4500 tidak diblokir firewall, dan PSK sudah benar.")
 	case strings.Contains(lower, "timeout") ||
 		strings.Contains(lower, "timed out") ||
 		strings.Contains(lower, "network"):
-		return newUserError("network",
+		return NewUserError("network",
 			"Gagal terhubung",
 			"Periksa server, jaringan, dan port UDP 500/4500 (L2TP/IPsec).")
 	case strings.Contains(lower, "already") && strings.Contains(lower, "connect"):
-		return newUserError("already",
+		return NewUserError("already",
 			"Terhubung",
 			"Sudah terhubung.")
 	default:
@@ -96,11 +99,13 @@ func MapExecError(op string, err error, output string) error {
 		if len(detail) > 240 {
 			detail = detail[:240] + "…"
 		}
-		return newUserError("generic", "Gagal", detail)
+		return NewUserError("generic", "Gagal", detail)
 	}
 }
 
-func sanitizeOutput(s string) string {
+// SanitizeOutput strips secret-bearing lines from tool output before it is
+// surfaced to the user or logs.
+func SanitizeOutput(s string) string {
 	s = strings.ReplaceAll(s, "\r\n", "\n")
 	// Drop lines that might echo secrets from verbose tools.
 	var kept []string
@@ -123,10 +128,10 @@ func sanitizeOutput(s string) string {
 func ValidateName(name string) error {
 	name = strings.TrimSpace(name)
 	if name == "" {
-		return newUserError("validation", "Tidak dapat menghubungkan", "Nama koneksi wajib diisi.")
+		return NewUserError("validation", "Tidak dapat menghubungkan", "Nama koneksi wajib diisi.")
 	}
 	if strings.ContainsAny(name, "\r\n\x00\"'") {
-		return newUserError("validation", "Tidak dapat menghubungkan", "Nama koneksi mengandung karakter tidak valid.")
+		return NewUserError("validation", "Tidak dapat menghubungkan", "Nama koneksi mengandung karakter tidak valid.")
 	}
 	return nil
 }

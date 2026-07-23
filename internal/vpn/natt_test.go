@@ -6,14 +6,14 @@ import (
 )
 
 func TestNatValueOK(t *testing.T) {
-	if !natValueOK(2) {
-		t.Error("natValueOK(2) = false, want true")
+	if !NatValueOK(2) {
+		t.Error("NatValueOK(2) = false, want true")
 	}
-	if natValueOK(0) {
-		t.Error("natValueOK(0) = true, want false")
+	if NatValueOK(0) {
+		t.Error("NatValueOK(0) = true, want false")
 	}
-	if natValueOK(1) {
-		t.Error("natValueOK(1) = true, want false")
+	if NatValueOK(1) {
+		t.Error("NatValueOK(1) = true, want false")
 	}
 }
 
