@@ -53,5 +53,8 @@ func TrafficCounters(name string) (uint64, uint64, error) { return 0, 0, unsuppo
 // ActiveConnections is not supported outside Windows.
 func ActiveConnections(name string) ([]ActiveConn, error) { return nil, unsupported() }
 
+// PingHost is not supported outside Windows.
+func PingHost(host string, timeoutMs uint32) (uint32, error) { return 0, unsupported() }
+
 // Silence unused import on some toolchains.
 var _ = fmt.Errorf

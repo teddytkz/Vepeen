@@ -1,5 +1,16 @@
 ## [Unreleased]
 
+### Changed
+
+- [2026-07-23] **fix-012** Medium: replace PowerShell/exec in periodic tickers with Win32 syscalls (`docs/planning/fix-012-win32-ticker-perf.md`)
+  - Eliminates ~4.5 subprocess spawns/second while connected (4× powershell.exe + 1× ping.exe)
+  - New `internal/vpn/netapi_windows.go`: `iphlpapi.dll` procs (`GetAdaptersAddresses`, `GetIfEntry2`, `GetExtendedTcpTable`, `IcmpCreateFile`/`IcmpSendEcho`/`IcmpCloseHandle`), struct defs, shared `resolveVPNInterfaceIndex` helper
+  - Rewrite `traffic_windows.go` (`TrafficCounters`) → `GetIfEntry2` for `InOctets`/`OutOctets`; delete `parseTrafficStats`/`extractNumber`
+  - Rewrite `connections_windows.go` (`ActiveConnections`) → `GetExtendedTcpTable` filtered by VPN unicast IPs; `reverseLookup` preserved
+  - Rewrite `ping_windows.go` (`pingGateway`) → `IcmpSendEcho` with 1000ms timeout; same Indonesian status strings
+  - No signature changes, no new deps, stubs untouched
+  - Pipeline: Backend Developer → Debugger/Reviewer
+
 ### Added
 
 - [2026-07-23] **prd-004** Medium: single encrypted config file `vepeen.bin` — replace the two-store setup (`config.json` + Windows Credential Manager) with one DPAPI user-scoped encrypted blob next to the executable. New `Stored`/`CredEntry` structs in `internal/config/config.go` (settings + per-profile `username`/`password`/`psk`); new `internal/config/dpapi_windows.go` (`crypt32.dll` `CryptProtectData`/`CryptUnprotectData`, `CRYPTPROTECT_UI_FORBIDDEN`) + `dpapi_other.go` stub; `Load()`/`Save()` encrypt/decrypt `vepeen.bin` atomically; one-time migration merges legacy `config.json` (both locations) + CredMan entries into `vepeen.bin` then purges old sources (idempotent, safe fallback). `internal/secrets` becomes migration-only read-only. `internal/ui/main_window.go` credential flows (`loadCredentials`/`persistCredentials`/`onConnect`/`persistQuiet`/`onSave`) read/write `Stored.Credentials` instead of `secrets.Store`. Non-goal: PSK capture UI is a follow-up (field stored, not yet collected). (`docs/planning/prd-004-encrypted-config.md`)

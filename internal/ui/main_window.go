@@ -3,14 +3,17 @@ package ui
 import (
 	"context"
 	"fmt"
+	"image/color"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/layout"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
 	"vepeen/internal/config"
@@ -79,6 +82,9 @@ type controller struct {
 	profiles      map[string]vpn.ProfileSummary // name -> summary (for ServerAddress)
 	trafficStop   chan struct{}                 // closed to stop the traffic ticker
 	trafficName   string                        // active connection name for the ticker
+
+	pingLabel *widget.Label // gateway ping status text
+	pingStop  chan struct{} // closed to stop the ping ticker
 }
 
 func newController() *controller {
@@ -89,6 +95,14 @@ func newController() *controller {
 		stored:         config.DefaultStored(),
 		cfg:            config.Default(),
 	}
+}
+
+// smallTitle renders a compact bold teal section heading used inside cards.
+func smallTitle(text string) *canvas.Text {
+	t := canvas.NewText(text, color.NRGBA{R: 0x0f, G: 0xb5, B: 0xae, A: 0xff})
+	t.TextSize = theme.Size(theme.SizeNameText) * 0.85
+	t.TextStyle = fyne.TextStyle{Bold: true}
+	return t
 }
 
 func (c *controller) build() fyne.CanvasObject {
@@ -113,8 +127,9 @@ func (c *controller) build() fyne.CanvasObject {
 	c.rememberCheck = widget.NewCheck("Ingat kredensial", nil)
 	c.rememberCheck.SetChecked(true)
 
-	cardKoneksi := widget.NewCard("Koneksi VPN", "",
+	cardKoneksi := widget.NewCard("", "",
 		container.NewVBox(
+			smallTitle("Koneksi VPN"),
 			widget.NewLabel("Pilih profil VPN yang sudah ada di Windows."),
 			c.profileSelect,
 			c.userEntry,
@@ -134,8 +149,8 @@ func (c *controller) build() fyne.CanvasObject {
 	routesHelp := widget.NewLabel("Contoh: 10.10.0.0/16, 203.0.113.50, atau mail.foofle.com. Kosong diabaikan. # = komentar.")
 	routesHelp.Wrapping = fyne.TextWrapWord
 
-	cardRute := widget.NewCard("Rute Split Tunnel", "",
-		container.NewVBox(routesDuty, c.routesEntry, routesHelp),
+	cardRute := widget.NewCard("", "",
+		container.NewVBox(smallTitle("Rute Split Tunnel"), routesDuty, c.routesEntry, routesHelp),
 	)
 
 	c.statusPri = widget.NewLabel("Terputus")
@@ -144,21 +159,19 @@ func (c *controller) build() fyne.CanvasObject {
 	c.statusDet = widget.NewLabel("Pilih koneksi VPN, isi rute, lalu Hubungkan.")
 	c.statusDet.Wrapping = fyne.TextWrapWord
 
-	cardStatus := widget.NewCard("Status", "",
-		container.NewVBox(c.statusPri, c.statusDet),
+	cardStatus := widget.NewCard("", "",
+		container.NewVBox(smallTitle("Status"), c.statusPri, c.statusDet),
 	)
 
-	logTitle := widget.NewLabel("Log")
-	logTitle.TextStyle = fyne.TextStyle{Bold: true}
 	c.btnClearLog = widget.NewButton("Bersihkan log", c.onClearLog)
-	logHeader := container.NewBorder(nil, nil, logTitle, c.btnClearLog)
+	logHeader := container.NewBorder(nil, nil, smallTitle("Log"), c.btnClearLog)
 
 	c.logEntry = widget.NewMultiLineEntry()
 	c.logEntry.SetMinRowsVisible(5)
 	c.logEntry.Wrapping = fyne.TextWrapOff
 	c.logEntry.Disable() // read-only activity history
 
-	cardLog := widget.NewCard("Log", "",
+	cardLog := widget.NewCard("", "",
 		container.NewVBox(logHeader, c.logEntry),
 	)
 
@@ -166,17 +179,23 @@ func (c *controller) build() fyne.CanvasObject {
 	c.hostArea.SetMinRowsVisible(4)
 	c.hostArea.Wrapping = fyne.TextWrapOff
 	c.hostArea.Disable()
-	cardInfo := widget.NewCard("Info Koneksi", "", container.NewVBox(c.hostArea))
+	cardInfo := widget.NewCard("", "", container.NewVBox(smallTitle("Info Koneksi"), c.hostArea))
 
 	c.dlLabel = widget.NewLabel("Download: —")
 	c.ulLabel = widget.NewLabel("Upload: —")
 	c.dlLabel.Wrapping = fyne.TextWrapWord
 	c.ulLabel.Wrapping = fyne.TextWrapWord
-	cardTraffic := widget.NewCard("Traffic", "", container.NewVBox(c.dlLabel, c.ulLabel))
+	cardTraffic := widget.NewCard("", "", container.NewVBox(smallTitle("Traffic"), c.dlLabel, c.ulLabel))
+
+	c.pingLabel = widget.NewLabel("tidak terhubung")
+	cardPing := widget.NewCard("", "", container.NewVBox(
+		smallTitle("Status Ping"),
+		c.pingLabel,
+	))
 
 	leftCol := container.NewBorder(cardKoneksi, nil, nil, nil, cardRute)
 	rightCol := container.NewBorder(cardStatus, nil, nil, nil,
-		container.NewVBox(cardLog, cardInfo, cardTraffic),
+		container.NewVBox(cardLog, cardInfo, cardTraffic, cardPing),
 	)
 
 	body := container.NewPadded(
@@ -459,6 +478,52 @@ func (c *controller) stopTraffic() {
 	}
 }
 
+// gatewayHost returns the connected VPN gateway address, or "" when not connected.
+func (c *controller) gatewayHost() string {
+	if c.state != vpn.StatusConnected {
+		return ""
+	}
+	p, ok := c.profiles[c.profileName()]
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(p.ServerAddress)
+}
+
+// startPingTicker launches a ~2s ticker that updates the gateway ping status.
+// Any prior ticker is stopped first.
+func (c *controller) startPingTicker() {
+	c.stopPingTicker()
+	stop := make(chan struct{})
+	c.pingStop = stop
+	go func() {
+		ticker := time.NewTicker(2 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-stop:
+				return
+			case <-ticker.C:
+				result := pingGateway(c.gatewayHost())
+				fyne.Do(func() {
+					c.pingLabel.SetText(result)
+				})
+			}
+		}
+	}()
+}
+
+// stopPingTicker halts the ping ticker (if any) and resets the label.
+func (c *controller) stopPingTicker() {
+	if c.pingStop != nil {
+		close(c.pingStop)
+		c.pingStop = nil
+	}
+	fyne.Do(func() {
+		c.pingLabel.SetText("tidak terhubung")
+	})
+}
+
 // setStatus updates short status labels only (does not append log).
 func (c *controller) setStatus(state vpn.ConnStatus, primary, detail string) {
 	c.state = state
@@ -700,6 +765,7 @@ func (c *controller) onConnect() {
 					c.appendLog("Sudah terhubung.")
 					c.hostArea.SetText("Menunggu daftar host…")
 					c.startTraffic(name)
+					c.startPingTicker()
 				} else {
 					primary, detail := formatVPNError(err)
 					c.setStatus(vpn.StatusError, primary, detail)
@@ -721,6 +787,7 @@ func (c *controller) onConnect() {
 				c.persistCredentials(name, strings.TrimSpace(c.userEntry.Text), c.passEntry.Text)
 				c.hostArea.SetText("Menunggu daftar host…")
 				c.startTraffic(name)
+				c.startPingTicker()
 			}
 			c.applyEnablement()
 		})
@@ -779,6 +846,7 @@ func (c *controller) onDisconnect() {
 				c.setStatus(vpn.StatusDisconnected, "Terputus", "Koneksi ditutup.")
 				c.appendLog("Koneksi ditutup.")
 				c.stopTraffic()
+				c.stopPingTicker()
 				c.hostArea.SetText("—")
 			}
 			c.applyEnablement()
