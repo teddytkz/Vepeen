@@ -16,13 +16,13 @@ func TestEvaluateRasdialResult(t *testing.T) {
 	}{
 		{"exit0 any text", nil, "command completed successfully", true},
 		{"exit0 empty", nil, "", true},
-		{"exit0 gagal text", nil, "koneksi gagal tapi exit 0", true},
+		{"exit0 failed-text but exit0", nil, "connection failed but exit 0", true},
 		{"exitN successfully", errors.New("exit 1"), "The command completed successfully.", true},
 		{"exitN already connected", errors.New("exit 1"), "Already connected.", true},
-		{"exitN berhasil", errors.New("exit 1"), "koneksi berhasil dibuat", true},
-		{"exitN sudah terhubung", errors.New("exit 1"), "anda sudah terhubung", true},
+		{"exitN succeeded", errors.New("exit 1"), "connection successfully established", true},
+		{"exitN already connected variant", errors.New("exit 1"), "you are already connected", true},
 		{"exitN connected", errors.New("exit 1"), "you are connected", true},
-		{"exitN gagal only", errors.New("exit 1"), "gagal menghubungkan", false},
+		{"exitN failed only", errors.New("exit 1"), "failed to connect", false},
 		{"exitN empty", errors.New("exit 1"), "", false},
 		{"exitN random", errors.New("exit 1"), "some other failure", false},
 	}

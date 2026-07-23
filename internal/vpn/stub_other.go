@@ -5,7 +5,7 @@ package vpn
 import "vepeen/internal/vpn/shared"
 
 func unsupported() error {
-	return shared.NewUserError("platform", "Gagal", "Fitur VPN hanya didukung di Windows.")
+	return shared.NewUserError("platform", "Failed", "VPN features are only supported on Windows.")
 }
 
 // ListProfiles is not supported outside Windows.

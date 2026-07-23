@@ -81,12 +81,12 @@ func (m *Manager) ConnectFull(ctx context.Context, req ConnectRequest, progress 
 	notify(PhaseNATCheck)
 	natRes, natErr := m.natCheckFn()
 	if natRes == NATElevationRequired {
-		log.Printf("ConnectFull: NAT-T memerlukan hak administrator: %s", shared.SanitizeOutput(natErr.Error()))
-		warnings = append(warnings, "NAT-T memerlukan hak administrator (AssumeUDPEncapsulationContextOnSendRule=2). Hubungkan mungkin gagal di belakang NAT; coba jalankan sebagai administrator.")
+		log.Printf("ConnectFull: NAT-T requires administrator privileges: %s", shared.SanitizeOutput(natErr.Error()))
+		warnings = append(warnings, "NAT-T requires administrator privileges (AssumeUDPEncapsulationContextOnSendRule=2). Connection may fail behind a NAT; try running as administrator.")
 	}
 	if natRes == NATSet {
-		log.Printf("ConnectFull: NAT-T diatur (AssumeUDPEncapsulationContextOnSendRule=2). Mungkin perlu restart agar berlaku.")
-		warnings = append(warnings, "NAT-T diatur (AssumeUDPEncapsulationContextOnSendRule=2). Mungkin perlu restart agar berlaku.")
+		log.Printf("ConnectFull: NAT-T set (AssumeUDPEncapsulationContextOnSendRule=2). A restart may be required for the change to take effect.")
+		warnings = append(warnings, "NAT-T set (AssumeUDPEncapsulationContextOnSendRule=2). A restart may be required for the change to take effect.")
 	}
 
 	prefixes := req.Routes
@@ -95,9 +95,9 @@ func (m *Manager) ConnectFull(ctx context.Context, req ConnectRequest, progress 
 		prefixes, err = route.ParseLines(req.RoutesText)
 		if err != nil {
 			if pe, ok := err.(*route.ParseError); ok {
-				return nil, shared.NewUserError("validation", "Tidak dapat menghubungkan", pe.Error())
+				return nil, shared.NewUserError("validation", "Cannot connect", pe.Error())
 			}
-			return nil, shared.NewUserError("validation", "Tidak dapat menghubungkan", err.Error())
+			return nil, shared.NewUserError("validation", "Cannot connect", err.Error())
 		}
 	}
 	// Windows VPN routes require IP prefixes, so resolve any domain entries
@@ -106,11 +106,11 @@ func (m *Manager) ConnectFull(ctx context.Context, req ConnectRequest, progress 
 	defer cancel()
 	resolved, rerr := route.ResolveRoutes(resolveCtx, prefixes)
 	if rerr != nil {
-		return nil, shared.NewUserError("validation", "Tidak dapat menghubungkan", rerr.Error())
+		return nil, shared.NewUserError("validation", "Cannot connect", rerr.Error())
 	}
 	prefixes = resolved
 	if len(prefixes) == 0 {
-		return nil, shared.NewUserError("validation", "Tidak dapat menghubungkan", "Isi minimal satu IP, CIDR, atau nama domain tujuan untuk split tunnel (mis. 10.0.0.0/24 atau example.com).")
+		return nil, shared.NewUserError("validation", "Cannot connect", "Enter at least one destination IP, CIDR, or domain name for split tunnel (e.g. 10.0.0.0/24 or example.com).")
 	}
 
 	notify(PhaseDisconnectOthers)
@@ -121,18 +121,18 @@ func (m *Manager) ConnectFull(ctx context.Context, req ConnectRequest, progress 
 
 	notify(PhaseSplitTunnelEnsure)
 	if err := m.ensureSplitTunnelingFn(name); err != nil {
-		log.Printf("ConnectFull: gagal mengaktifkan split tunnel: %s Koneksi dilanjutkan; rute mungkin tidak diterapkan.", shared.SanitizeOutput(err.Error()))
-		warnings = append(warnings, "Gagal mengaktifkan split tunnel: "+shared.SanitizeOutput(err.Error())+". Koneksi dilanjutkan; rute split tunnel mungkin tidak diterapkan.")
+		log.Printf("ConnectFull: failed to enable split tunnel: %s Connection will continue; routes may not be applied.", shared.SanitizeOutput(err.Error()))
+		warnings = append(warnings, "Failed to enable split tunnel: "+shared.SanitizeOutput(err.Error())+". Connection will continue; split tunnel routes may not be applied.")
 	}
 
 	notify(PhaseSyncRoutes)
 	if err := m.syncRoutesFn(name, prefixes); err != nil {
 		// Best-effort: do not abort connect for a transient route-sync error.
-		log.Printf("ConnectFull: penyelarasan rute dilewati: %s Koneksi dilanjutkan; rute split tunnel mungkin perlu disimpan ulang.", shared.SanitizeOutput(err.Error()))
-		warnings = append(warnings, "Penyelarasan rute dilewati: "+shared.SanitizeOutput(err.Error())+". Koneksi dilanjutkan; rute split tunnel mungkin perlu disimpan ulang.")
+		log.Printf("ConnectFull: route sync skipped: %s Connection will continue; split tunnel routes may need to be re-saved.", shared.SanitizeOutput(err.Error()))
+		warnings = append(warnings, "Route sync skipped: "+shared.SanitizeOutput(err.Error())+". Connection will continue; split tunnel routes may need to be re-saved.")
 	}
 	if ctx.Err() != nil {
-		return nil, shared.NewUserError("canceled", "Dibatalkan", "Penghubungan dibatalkan.")
+		return nil, shared.NewUserError("canceled", "Cancelled", "Connection cancelled.")
 	}
 
 	notify(PhaseDial)
@@ -140,7 +140,7 @@ func (m *Manager) ConnectFull(ctx context.Context, req ConnectRequest, progress 
 		return nil, err
 	}
 	if ctx.Err() != nil {
-		return nil, shared.NewUserError("canceled", "Dibatalkan", "Penghubungan dibatalkan.")
+		return nil, shared.NewUserError("canceled", "Cancelled", "Connection cancelled.")
 	}
 
 	notify(PhaseSplitEnforce)
@@ -148,7 +148,7 @@ func (m *Manager) ConnectFull(ctx context.Context, req ConnectRequest, progress 
 		// best-effort; do not fail connect
 	}
 	if ctx.Err() != nil {
-		return nil, shared.NewUserError("canceled", "Dibatalkan", "Penghubungan dibatalkan.")
+		return nil, shared.NewUserError("canceled", "Cancelled", "Connection cancelled.")
 	}
 
 	notify(PhaseDone)
@@ -165,6 +165,7 @@ func (m *Manager) Status(name string) (ConnStatus, error) {
 	return QueryStatus(name)
 }
 
+// sanitizeDetail redacts secret-bearing content and caps detail length.
 func sanitizeDetail(s string) string {
 	s = strings.TrimSpace(s)
 	if len(s) > 200 {
@@ -173,26 +174,26 @@ func sanitizeDetail(s string) string {
 	// Never invent secrets; just strip common secret flags if present.
 	lower := strings.ToLower(s)
 	if strings.Contains(lower, "l2tppsk") || strings.Contains(lower, "password") {
-		return "Detail teknis disembunyikan demi keamanan."
+		return "Technical details hidden for security."
 	}
 	return s
 }
 
-// PhaseDetail returns Indonesian status detail for a connect phase.
+// PhaseDetail returns a status detail string for a connect phase.
 func PhaseDetail(p Phase) string {
 	switch p {
 	case PhaseSplitTunnelEnsure:
-		return "Mengaktifkan split tunnel…"
+		return "Enabling split tunnel…"
 	case PhaseSyncRoutes:
-		return "Menyelaraskan rute (split tunnel)…"
+		return "Syncing routes (split tunnel)…"
 	case PhaseDial:
-		return "Menghubungi server…"
+		return "Connecting to server…"
 	case PhaseSplitEnforce:
-		return "Menegakkan split tunnel…"
+		return "Enforcing split tunnel…"
 	case PhaseDisconnectOthers:
-		return "Memutuskan VPN lain…"
+		return "Disconnecting other VPNs…"
 	case PhaseDone:
-		return "Hanya IP/CIDR pada daftar yang melewati VPN."
+		return "Only the listed IPs/CIDRs route through the VPN."
 	default:
 		return ""
 	}

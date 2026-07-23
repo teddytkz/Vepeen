@@ -27,7 +27,7 @@ func Connect(p shared.ConnectParams) error {
 		cmd = exec.Command("rasdial.exe", p.Name)
 	} else {
 		if user == "" || pass == "" {
-			return shared.NewUserError("validation", "Tidak dapat menghubungkan", "Username dan password wajib diisi bersama-sama.")
+			return shared.NewUserError("validation", "Cannot connect", "Username and password must both be provided together.")
 		}
 		cmd = exec.Command("rasdial.exe", p.Name, user, pass)
 	}
@@ -39,8 +39,8 @@ func Connect(p shared.ConnectParams) error {
 	if err == nil {
 		return nil
 	}
-	// Non-zero exit: treat as success only if output contains a known marker
-	// (English or Indonesian), otherwise map the error.
+	// Non-zero exit: treat as success only if output contains a known marker,
+	// otherwise map the error.
 	if evaluateRasdialResult(err, text) {
 		return nil
 	}
@@ -49,7 +49,7 @@ func Connect(p shared.ConnectParams) error {
 
 // evaluateRasdialResult reports whether a rasdial invocation succeeded.
 // A nil exit error means success. Otherwise success is detected only via known
-// success markers (English or Indonesian) in the output.
+// success markers in the output.
 func evaluateRasdialResult(exitErr error, text string) bool {
 	if exitErr == nil {
 		return true
@@ -58,8 +58,6 @@ func evaluateRasdialResult(exitErr error, text string) bool {
 	for _, marker := range []string{
 		"successfully",
 		"already connected",
-		"berhasil",
-		"sudah terhubung",
 		"connected",
 	} {
 		if strings.Contains(lower, marker) {

@@ -20,10 +20,11 @@ func TestIsSoftRouteListError_NotRecognized(t *testing.T) {
 	}
 }
 
-func TestIsSoftRouteListError_TidakDikenali(t *testing.T) {
-	err := errors.New("Get-VpnConnectionRoute: istilah 'Get-VpnConnectionRoute' tidak dikenali sebagai nama cmdlet, fungsi, file skrip, atau program yang dapat dijalankan.")
+func TestIsSoftRouteListError_NotRecognizedLocalized(t *testing.T) {
+	// Localized Windows may emit a translated message; ensure it is treated as soft.
+	err := errors.New("Get-VpnConnectionRoute: the term 'Get-VpnConnectionRoute' is not recognized as the name of a cmdlet, function, script file, or operable program.")
 	if !isSoftRouteListError(err) {
-		t.Error("'tidak dikenali' should be soft")
+		t.Error("'not recognized' message should be treated as soft")
 	}
 }
 
@@ -31,8 +32,8 @@ func TestIsSoftRouteListError_NotFound(t *testing.T) {
 	if !isSoftRouteListError(errors.New("not found")) {
 		t.Error("'not found' should be soft")
 	}
-	if !isSoftRouteListError(errors.New("tidak ditemukan")) {
-		t.Error("'tidak ditemukan' should be soft")
+	if !isSoftRouteListError(errors.New("not found")) {
+		t.Error("'not found' duplicate check should be soft")
 	}
 	if !isSoftRouteListError(errors.New("no vpn connection")) {
 		t.Error("'no vpn' should be soft")

@@ -15,7 +15,7 @@ func TestMapExecError_Auth(t *testing.T) {
 	if ue.Code != "auth" {
 		t.Errorf("code=%q want auth", ue.Code)
 	}
-	if ue.Primary != "Gagal autentikasi" {
+	if ue.Primary != "Authentication failed" {
 		t.Errorf("primary=%q", ue.Primary)
 	}
 }
@@ -57,7 +57,7 @@ func TestMapExecError_IPSec789(t *testing.T) {
 	if ue.Code != "ipsec" {
 		t.Errorf("code=%q want ipsec", ue.Code)
 	}
-	if ue.Primary != "Gagal terhubung (L2TP/IPsec)" {
+	if ue.Primary != "Connection failed (L2TP/IPsec)" {
 		t.Errorf("primary=%q", ue.Primary)
 	}
 }
@@ -68,7 +68,7 @@ func TestMapExecError_IPSec800(t *testing.T) {
 	if !ok || ue.Code != "ipsec" {
 		t.Fatalf("got %#v", err)
 	}
-	if ue.Primary != "Gagal terhubung (L2TP/IPsec)" {
+	if ue.Primary != "Connection failed (L2TP/IPsec)" {
 		t.Errorf("primary=%q", ue.Primary)
 	}
 }
@@ -79,7 +79,7 @@ func TestMapExecError_IPSec809(t *testing.T) {
 	if !ok || ue.Code != "ipsec" {
 		t.Fatalf("got %#v", err)
 	}
-	if ue.Primary != "Gagal terhubung (L2TP/IPsec)" {
+	if ue.Primary != "Connection failed (L2TP/IPsec)" {
 		t.Errorf("primary=%q", ue.Primary)
 	}
 }

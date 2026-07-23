@@ -31,21 +31,21 @@ func EnsureNATRegistry() (shared.NATResult, error) {
 	if werr != nil {
 		if errors.Is(werr, windows.ERROR_ACCESS_DENIED) {
 			return shared.NATElevationRequired, shared.NewUserError("nat",
-				"Gagal menghubungkan (NAT-T)",
-				"Windows memblokir L2TP/IPsec di belakang NAT. Atur registri HKLM\\SYSTEM\\CurrentControlSet\\Services\\PolicyAgent\\AssumeUDPEncapsulationContextOnSendRule = 2 (jalankan sebagai administrator), lalu coba lagi. Vepeen mencoba mengaturnya otomatis tetapi memerlukan hak administrator.")
+				"Connection failed (NAT-T)",
+				"Windows is blocking L2TP/IPsec behind a NAT. Set registry HKLM\\SYSTEM\\CurrentControlSet\\Services\\PolicyAgent\\AssumeUDPEncapsulationContextOnSendRule = 2 (run as administrator), then try again. Vepeen attempts to set this automatically but requires administrator privileges.")
 		}
 		return shared.NATElevationRequired, shared.NewUserError("nat",
-			"Gagal menghubungkan (NAT-T)",
-			"Windows memblokir L2TP/IPsec di belakang NAT. Atur registri HKLM\\SYSTEM\\CurrentControlSet\\Services\\PolicyAgent\\AssumeUDPEncapsulationContextOnSendRule = 2 (jalankan sebagai administrator), lalu coba lagi. Vepeen mencoba mengaturnya otomatis tetapi memerlukan hak administrator.")
+			"Connection failed (NAT-T)",
+			"Windows is blocking L2TP/IPsec behind a NAT. Set registry HKLM\\SYSTEM\\CurrentControlSet\\Services\\PolicyAgent\\AssumeUDPEncapsulationContextOnSendRule = 2 (run as administrator), then try again. Vepeen attempts to set this automatically but requires administrator privileges.")
 	}
 	defer wk.Close()
 
 	// 3. Set value to 2.
 	if serr := wk.SetDWordValue(shared.NatValueName, shared.NatValueTarget); serr != nil {
-		log.Printf("EnsureNATRegistry: gagal menulis nilai registri: %v", serr)
+		log.Printf("EnsureNATRegistry: failed to write registry value: %v", serr)
 		return shared.NATElevationRequired, shared.NewUserError("nat",
-			"Gagal menghubungkan (NAT-T)",
-			"Windows memblokir L2TP/IPsec di belakang NAT. Atur registri HKLM\\SYSTEM\\CurrentControlSet\\Services\\PolicyAgent\\AssumeUDPEncapsulationContextOnSendRule = 2 (jalankan sebagai administrator), lalu coba lagi. Vepeen mencoba mengaturnya otomatis tetapi memerlukan hak administrator.")
+			"Connection failed (NAT-T)",
+			"Windows is blocking L2TP/IPsec behind a NAT. Set registry HKLM\\SYSTEM\\CurrentControlSet\\Services\\PolicyAgent\\AssumeUDPEncapsulationContextOnSendRule = 2 (run as administrator), then try again. Vepeen attempts to set this automatically but requires administrator privileges.")
 	}
 	return shared.NATSet, nil
 }

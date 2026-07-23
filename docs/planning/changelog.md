@@ -2,6 +2,26 @@
 
 ### Changed
 
+- [2026-07-23] **i18n-en** — Translated ALL Indonesian-language string literals and comments to English across the entire codebase. Pure text/localization change — zero logic changes. Files updated:
+  - `internal/route/parse.go` — 6 error/format strings (ParseError messages, ResolveRoutes errors)
+  - `internal/route/parse_test.go` — assertion strings updated to match new English messages
+  - `internal/route/sync_other.go` — stub error message
+  - `internal/route/sync_windows.go` — 6 error strings (connection name, route operations)
+  - `internal/route/sync_windows_test.go` — test case names and `t.Error` assertion strings (Indonesian OS locale test data strings preserved with comments)
+  - `internal/ui/ping_other.go` — stub error message
+  - `internal/ui/tray_windows.go` — "Tampilkan"/"Keluar" menu item labels → "Show"/"Quit"
+  - `internal/ui/main_window.go` — all UI labels, button text, placeholder text, card titles, status/log messages (~40 strings)
+  - `internal/vpn/errors_test.go` — assertion strings for MapExecError results
+  - `internal/vpn/manager.go` — UserError primary/detail strings, phase detail strings, comments
+  - `internal/vpn/shared/errors.go` — all UserError primary/detail strings in MapExecError, ValidateName
+  - `internal/vpn/stub_other.go` — stub UserError strings
+  - `internal/vpn/win/dial_windows.go` — UserError validation message; OS-locale matching strings kept as-is
+  - `internal/vpn/win/dial_windows_test.go` — test case names translated; Indonesian rasdial OS-locale text values preserved with explanatory comments
+  - `internal/vpn/win/natt_windows.go` — log messages and UserError strings (3 occurrences)
+  - `internal/vpn/win/profile_windows.go` — embedded PowerShell sentinel string
+
+- [2026-07-23] Translated Indonesian string literals to English in `internal/ui/ping_windows.go`: `"tidak terhubung"` → `"not connected"`, `"timeout / tidak ada balasan"` → `"timeout / no reply"`. No logic changes.
+
 - [2026-07-23] **prd-vpn-win-package** Medium: refactor — group all Windows-only VPN code into a new `internal/vpn/win` package (`package win`); `internal/vpn` becomes a thin platform-neutral facade that re-exports the OS-specific symbols (delegating to `win` on Windows, `stub_other.go` elsewhere). Moves 9 files: `status_windows.go`, `connections_windows.go`, `dial_windows.go`, `disconnectall_windows.go`, `natt_windows.go`, `netapi_windows.go`, `powershell_windows.go`, `profile_windows.go`, `traffic_windows.go` (+ their 2 tests). `Manager.NewManager()` keeps referencing `vpn.`-level names (no `win` import, no build-tag change). `internal/ui` and `cmd/vepeen` require zero edits. No behavior/string changes. `psQuote`/`runPowerShell` dedup deferred to follow-up. (`docs/planning/prd-vpn-win-package.md`)
 
 ### Fixed

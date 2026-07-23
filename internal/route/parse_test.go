@@ -189,8 +189,8 @@ func TestResolveRoutes_LookupError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error")
 	}
-	if !strings.Contains(err.Error(), "gagal mengresolve") {
-		t.Errorf("error %q should contain 'gagal mengresolve'", err)
+	if !strings.Contains(err.Error(), "failed to resolve domain") {
+		t.Errorf("error %q should contain 'failed to resolve domain'", err)
 	}
 }
 
@@ -205,7 +205,7 @@ func TestResolveRoutes_OnlyIPv6(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error")
 	}
-	if !strings.Contains(err.Error(), "tidak memiliki alamat IPv4") {
-		t.Errorf("error %q should contain 'tidak memiliki alamat IPv4'", err)
+	if !strings.Contains(err.Error(), "has no IPv4 address") {
+		t.Errorf("error %q should contain 'has no IPv4 address'", err)
 	}
 }

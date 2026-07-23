@@ -115,22 +115,22 @@ func (c *controller) build() fyne.CanvasObject {
 	header := container.NewPadded(container.NewVBox(title, subtitle, widget.NewSeparator()))
 
 	c.profileSelect = widget.NewSelect([]string{}, c.onProfileChanged)
-	c.profileSelect.PlaceHolder = "Pilih koneksi VPN Windows…"
+	c.profileSelect.PlaceHolder = "Select Windows VPN connection…"
 
 	c.userEntry = widget.NewEntry()
-	c.userEntry.SetPlaceHolder("Username (opsional)")
+	c.userEntry.SetPlaceHolder("Username (optional)")
 	c.passEntry = widget.NewPasswordEntry()
-	c.passEntry.SetPlaceHolder("Password (opsional)")
-	credNote := widget.NewLabel("Kosongkan username/password untuk menggunakan kredensial yang tersimpan di Windows Credential Manager.")
+	c.passEntry.SetPlaceHolder("Password (optional)")
+	credNote := widget.NewLabel("Leave username/password blank to use credentials saved in Windows Credential Manager.")
 	credNote.Wrapping = fyne.TextWrapWord
 
-	c.rememberCheck = widget.NewCheck("Ingat kredensial", nil)
+	c.rememberCheck = widget.NewCheck("Remember credentials", nil)
 	c.rememberCheck.SetChecked(true)
 
 	cardKoneksi := widget.NewCard("", "",
 		container.NewVBox(
-			smallTitle("Koneksi VPN"),
-			widget.NewLabel("Pilih profil VPN yang sudah ada di Windows."),
+			smallTitle("VPN Connection"),
+			widget.NewLabel("Select an existing VPN profile from Windows."),
 			c.profileSelect,
 			c.userEntry,
 			c.passEntry,
@@ -139,31 +139,31 @@ func (c *controller) build() fyne.CanvasObject {
 		),
 	)
 
-	routesDuty := widget.NewLabel("Wajib · satu IP, CIDR, atau nama domain per baris. Hanya daftar ini lewat VPN.")
+	routesDuty := widget.NewLabel("Required · one IP, CIDR, or domain name per line. Only these destinations route through the VPN.")
 	routesDuty.Wrapping = fyne.TextWrapWord
 
 	c.routesEntry = widget.NewMultiLineEntry()
 	c.routesEntry.SetMinRowsVisible(3)
 	c.routesEntry.Wrapping = fyne.TextWrapOff
 
-	routesHelp := widget.NewLabel("Contoh: 10.10.0.0/16, 203.0.113.50, atau mail.foofle.com. Kosong diabaikan. # = komentar.")
+	routesHelp := widget.NewLabel("Examples: 10.10.0.0/16, 203.0.113.50, or mail.foofle.com. Blank lines ignored. # = comment.")
 	routesHelp.Wrapping = fyne.TextWrapWord
 
 	cardRute := widget.NewCard("", "",
-		container.NewVBox(smallTitle("Rute Split Tunnel"), routesDuty, c.routesEntry, routesHelp),
+		container.NewVBox(smallTitle("Split Tunnel Routes"), routesDuty, c.routesEntry, routesHelp),
 	)
 
-	c.statusPri = widget.NewLabel("Terputus")
+	c.statusPri = widget.NewLabel("Disconnected")
 	c.statusPri.TextStyle = fyne.TextStyle{Bold: true}
 	c.statusPri.Wrapping = fyne.TextWrapWord
-	c.statusDet = widget.NewLabel("Pilih koneksi VPN, isi rute, lalu Hubungkan.")
+	c.statusDet = widget.NewLabel("Select a VPN connection, enter routes, then click Connect.")
 	c.statusDet.Wrapping = fyne.TextWrapWord
 
 	cardStatus := widget.NewCard("", "",
 		container.NewVBox(smallTitle("Status"), c.statusPri, c.statusDet),
 	)
 
-	c.btnClearLog = widget.NewButton("Bersihkan log", c.onClearLog)
+	c.btnClearLog = widget.NewButton("Clear log", c.onClearLog)
 	logHeader := container.NewBorder(nil, nil, smallTitle("Log"), c.btnClearLog)
 
 	c.logEntry = widget.NewMultiLineEntry()
@@ -179,7 +179,7 @@ func (c *controller) build() fyne.CanvasObject {
 	c.hostArea.SetMinRowsVisible(4)
 	c.hostArea.Wrapping = fyne.TextWrapOff
 	c.hostArea.Disable()
-	cardInfo := widget.NewCard("", "", container.NewVBox(smallTitle("Info Koneksi"), c.hostArea))
+	cardInfo := widget.NewCard("", "", container.NewVBox(smallTitle("Connection Info"), c.hostArea))
 
 	c.dlLabel = widget.NewLabel("Download: —")
 	c.ulLabel = widget.NewLabel("Upload: —")
@@ -187,9 +187,9 @@ func (c *controller) build() fyne.CanvasObject {
 	c.ulLabel.Wrapping = fyne.TextWrapWord
 	cardTraffic := widget.NewCard("", "", container.NewVBox(smallTitle("Traffic"), c.dlLabel, c.ulLabel))
 
-	c.pingLabel = widget.NewLabel("tidak terhubung")
+	c.pingLabel = widget.NewLabel("not connected")
 	cardPing := widget.NewCard("", "", container.NewVBox(
-		smallTitle("Status Ping"),
+		smallTitle("Ping Status"),
 		c.pingLabel,
 	))
 
@@ -202,10 +202,10 @@ func (c *controller) build() fyne.CanvasObject {
 		container.NewGridWithColumns(2, leftCol, rightCol),
 	)
 
-	c.btnSave = widget.NewButton("Simpan", c.onSave)
-	c.btnDisc = widget.NewButton("Putuskan", c.onDisconnect)
-	c.btnCancel = widget.NewButton("Batal", c.onCancel)
-	c.btnConn = widget.NewButton("Hubungkan", c.onConnect)
+	c.btnSave = widget.NewButton("Save", c.onSave)
+	c.btnDisc = widget.NewButton("Disconnect", c.onDisconnect)
+	c.btnCancel = widget.NewButton("Cancel", c.onCancel)
+	c.btnConn = widget.NewButton("Connect", c.onConnect)
 	c.btnConn.Importance = widget.HighImportance
 
 	buttonRow := container.NewPadded(
@@ -258,31 +258,31 @@ func (c *controller) onClearLog() {
 		return
 	}
 	c.logEntry.SetText("")
-	c.appendLog("Log dibersihkan.")
+	c.appendLog("Log cleared.")
 }
 
 func (c *controller) loadInitial() {
 	// Best-effort cleanup of orphaned temp VPN scripts from prior runs.
 	vpn.PurgeOrphanScripts()
 
-	c.appendLog("Siap. Pilih koneksi VPN, isi rute, lalu Hubungkan.")
+	c.appendLog("Ready. Select a VPN connection, enter routes, then click Connect.")
 
 	stored, err := config.LoadStored()
 	if err != nil {
-		c.setStatus(vpn.StatusDisconnected, "Terputus", "Gagal memuat pengaturan; memakai default.")
-		c.appendLog("Gagal memuat pengaturan; memakai default.")
+		c.setStatus(vpn.StatusDisconnected, "Disconnected", "Failed to load settings; using defaults.")
+		c.appendLog("Failed to load settings; using defaults.")
 	} else {
 		c.stored = stored
 		c.cfg = stored.Config()
 		c.applyConfig(c.cfg)
-		c.setStatus(vpn.StatusDisconnected, "Terputus", "Pengaturan dimuat.")
-		c.appendLog("Pengaturan dimuat.")
+		c.setStatus(vpn.StatusDisconnected, "Disconnected", "Settings loaded.")
+		c.appendLog("Settings loaded.")
 	}
 
 	go func() {
 		profiles, err := vpn.ListProfiles()
 		if err != nil {
-			c.appendLog("Gagal memuat daftar koneksi VPN.")
+			c.appendLog("Failed to load VPN connection list.")
 			return
 		}
 		fyne.Do(func() {
@@ -310,8 +310,8 @@ func (c *controller) loadInitial() {
 		fyne.Do(func() {
 			if st == vpn.StatusConnected {
 				c.state = vpn.StatusConnected
-				c.setStatus(vpn.StatusConnected, "Terhubung", "Hanya IP/CIDR pada daftar yang melewati VPN.")
-				c.appendLog("Sudah terhubung (status OS).")
+				c.setStatus(vpn.StatusConnected, "Connected", "Only the listed IPs/CIDRs route through the VPN.")
+				c.appendLog("Already connected (OS status).")
 				c.applyEnablement()
 			}
 		})
@@ -428,7 +428,7 @@ func (c *controller) startTraffic(name string) {
 					prevRx, prevTx = rx, tx
 				}
 
-				hostText := "Belum ada koneksi TCP aktif melalui VPN.\n(Buka situs web/aplikasi di rentang rute; ping/ICMP tidak ditampilkan.)"
+				hostText := "No active TCP connections through the VPN.\n(Open a website/app within the route range; ping/ICMP is not shown.)"
 				if conns, cerr := vpn.ActiveConnections(name); cerr == nil && len(conns) > 0 {
 					var b strings.Builder
 					for _, ac := range conns {
@@ -520,7 +520,7 @@ func (c *controller) stopPingTicker() {
 		c.pingStop = nil
 	}
 	fyne.Do(func() {
-		c.pingLabel.SetText("tidak terhubung")
+		c.pingLabel.SetText("not connected")
 	})
 }
 
@@ -604,8 +604,8 @@ func (c *controller) onSave() {
 	if strings.TrimSpace(routesText) != "" {
 		parsed, err := route.ParseLines(routesText)
 		if err != nil {
-			c.finishSave(false, "Tidak dapat menyimpan", err.Error())
-			c.appendLog("Validasi: " + err.Error())
+			c.finishSave(false, "Cannot save", err.Error())
+			c.appendLog("Validation: " + err.Error())
 			if c.win != nil {
 				c.win.Canvas().Focus(c.routesEntry)
 			}
@@ -627,19 +627,19 @@ func (c *controller) onSave() {
 		if err := config.SaveStored(cfg); err != nil {
 			fyne.Do(func() {
 				detail := sanitizeUIErr(err)
-				c.finishSave(false, "Gagal menyimpan pengaturan", detail)
-				c.appendLog("Gagal menyimpan: " + detail)
+				c.finishSave(false, "Failed to save settings", detail)
+				c.appendLog("Failed to save: " + detail)
 			})
 			return
 		}
 		fyne.Do(func() {
 			c.persistCredentials(name, strings.TrimSpace(c.userEntry.Text), c.passEntry.Text)
 			if keepState == vpn.StatusConnected {
-				c.finishSaveKeep(keepState, keepPrimary, "Pengaturan disimpan.")
+				c.finishSaveKeep(keepState, keepPrimary, "Settings saved.")
 			} else {
-				c.finishSaveKeep(vpn.StatusDisconnected, "Terputus", "Pengaturan disimpan.")
+				c.finishSaveKeep(vpn.StatusDisconnected, "Disconnected", "Settings saved.")
 			}
-			c.appendLog("Pengaturan disimpan.")
+			c.appendLog("Settings saved.")
 		})
 	}()
 }
@@ -666,8 +666,8 @@ func (c *controller) onConnect() {
 	c.mu.Lock()
 	if c.busy || c.state == vpn.StatusConnected || c.state == vpn.StatusConnecting {
 		if c.state == vpn.StatusConnected {
-			c.setStatus(vpn.StatusConnected, "Terhubung", "Sudah terhubung.")
-			c.appendLog("Sudah terhubung.")
+			c.setStatus(vpn.StatusConnected, "Connected", "Already connected.")
+			c.appendLog("Already connected.")
 		}
 		c.mu.Unlock()
 		return
@@ -679,8 +679,8 @@ func (c *controller) onConnect() {
 		c.mu.Lock()
 		c.busy = false
 		c.mu.Unlock()
-		c.setStatus(vpn.StatusError, "Tidak dapat menghubungkan", errMsg)
-		c.appendLog("Validasi: " + errMsg)
+		c.setStatus(vpn.StatusError, "Cannot connect", errMsg)
+		c.appendLog("Validation: " + errMsg)
 		c.applyEnablement()
 		if focus != nil && c.win != nil {
 			c.win.Canvas().Focus(focus)
@@ -710,8 +710,8 @@ func (c *controller) onConnect() {
 		}
 	}
 
-	c.setStatus(vpn.StatusConnecting, "Menghubungkan…", "Menyiapkan rute split tunnel…")
-	c.appendLogf("Menghubungkan ke %s…", name)
+	c.setStatus(vpn.StatusConnecting, "Connecting…", "Preparing split tunnel routes…")
+	c.appendLogf("Connecting to %s…", name)
 	c.applyEnablement()
 
 	go c.persistQuiet(req)
@@ -740,8 +740,8 @@ func (c *controller) onConnect() {
 			c.mu.Unlock()
 			if err != nil {
 				if ue, ok := vpn.AsUserError(err); ok && ue.Code == "canceled" {
-					c.setStatus(vpn.StatusDisconnected, "Dibatalkan", "Penghubungan dibatalkan.")
-					c.appendLog("Dibatalkan.")
+					c.setStatus(vpn.StatusDisconnected, "Cancelled", "Connection cancelled.")
+					c.appendLog("Cancelled.")
 					// best-effort cleanup of a half-open tunnel, then refresh real status
 					go func() {
 						_ = c.mgr.DisconnectFull(name)
@@ -752,9 +752,9 @@ func (c *controller) onConnect() {
 							c.mu.Unlock()
 							switch st {
 							case vpn.StatusConnected:
-								c.setStatus(vpn.StatusConnected, "Masih terhubung", "Putuskan secara manual.")
+								c.setStatus(vpn.StatusConnected, "Still connected", "Disconnect manually.")
 							default:
-								c.setStatus(vpn.StatusDisconnected, "Dibatalkan", "Penghubungan dibatalkan.")
+								c.setStatus(vpn.StatusDisconnected, "Cancelled", "Connection cancelled.")
 							}
 							c.applyEnablement()
 						})
@@ -762,8 +762,8 @@ func (c *controller) onConnect() {
 				} else if ue, ok := vpn.AsUserError(err); ok && ue.Code == "already" {
 					// Already connected is a success-like state: enable Disconnect.
 					c.setStatus(vpn.StatusConnected, ue.Primary, ue.Detail)
-					c.appendLog("Sudah terhubung.")
-					c.hostArea.SetText("Menunggu daftar host…")
+					c.appendLog("Already connected.")
+					c.hostArea.SetText("Waiting for host list…")
 					c.startTraffic(name)
 					c.startPingTicker()
 				} else {
@@ -776,16 +776,16 @@ func (c *controller) onConnect() {
 					}
 				}
 			} else {
-				c.setStatus(vpn.StatusConnected, "Terhubung", "Hanya IP/CIDR pada daftar yang melewati VPN.")
-				c.appendLog("Terhubung. Split tunnel aktif.")
+				c.setStatus(vpn.StatusConnected, "Connected", "Only the listed IPs/CIDRs route through the VPN.")
+				c.appendLog("Connected. Split tunnel active.")
 				if diag, derr := vpn.ProfileDiagnostics(name); derr == nil && diag != "" {
-					c.appendLog("Diagnostik: " + diag)
+					c.appendLog("Diagnostics: " + diag)
 				}
 				for _, w := range warnings {
 					c.appendLog(w)
 				}
 				c.persistCredentials(name, strings.TrimSpace(c.userEntry.Text), c.passEntry.Text)
-				c.hostArea.SetText("Menunggu daftar host…")
+				c.hostArea.SetText("Waiting for host list…")
 				c.startTraffic(name)
 				c.startPingTicker()
 			}
@@ -805,7 +805,7 @@ func (c *controller) onCancel() {
 	if cancel != nil {
 		cancel()
 	}
-	c.appendLog("Membatalkan penghubungan…")
+	c.appendLog("Cancelling connection…")
 	// The running ConnectFull will return a canceled error; completion handler cleans up.
 }
 
@@ -813,8 +813,8 @@ func (c *controller) onDisconnect() {
 	c.mu.Lock()
 	if c.busy || c.state != vpn.StatusConnected {
 		if c.state == vpn.StatusDisconnected {
-			c.setStatus(vpn.StatusDisconnected, "Terputus", "Sudah terputus.")
-			c.appendLog("Sudah terputus.")
+			c.setStatus(vpn.StatusDisconnected, "Disconnected", "Already disconnected.")
+			c.appendLog("Already disconnected.")
 		}
 		c.mu.Unlock()
 		return
@@ -824,8 +824,8 @@ func (c *controller) onDisconnect() {
 
 	name := c.profileName()
 
-	c.setStatus(vpn.StatusDisconnecting, "Memutuskan…", "")
-	c.appendLog("Memutuskan…")
+	c.setStatus(vpn.StatusDisconnecting, "Disconnecting…", "")
+	c.appendLog("Disconnecting…")
 	c.applyEnablement()
 
 	go func() {
@@ -843,8 +843,8 @@ func (c *controller) onDisconnect() {
 					c.appendLog(primary)
 				}
 			} else {
-				c.setStatus(vpn.StatusDisconnected, "Terputus", "Koneksi ditutup.")
-				c.appendLog("Koneksi ditutup.")
+				c.setStatus(vpn.StatusDisconnected, "Disconnected", "Connection closed.")
+				c.appendLog("Connection closed.")
 				c.stopTraffic()
 				c.stopPingTicker()
 				c.hostArea.SetText("—")
@@ -857,14 +857,14 @@ func (c *controller) onDisconnect() {
 func (c *controller) validateConnect() (string, fyne.Focusable) {
 	// Hidden name always defaults; never block connect on empty name.
 	if strings.TrimSpace(c.profileSelect.Selected) == "" {
-		return "Pilih koneksi VPN terlebih dahulu.", c.profileSelect
+		return "Select a VPN connection first.", c.profileSelect
 	}
 	prefixes, err := route.ParseLines(c.routesEntry.Text)
 	if err != nil {
 		return err.Error(), c.routesEntry
 	}
 	if len(prefixes) == 0 {
-		return "Isi minimal satu IP, CIDR, atau nama domain untuk split tunnel.", c.routesEntry
+		return "Enter at least one IP, CIDR, or domain name for split tunnel.", c.routesEntry
 	}
 	return "", nil
 }
@@ -882,9 +882,9 @@ func formatVPNError(err error) (primary, detail string) {
 		return ue.Primary, ue.Detail
 	}
 	if pe, ok := err.(*route.ParseError); ok {
-		return "Tidak dapat menghubungkan", pe.Error()
+		return "Cannot connect", pe.Error()
 	}
-	return "Gagal", sanitizeUIErr(err)
+	return "Failed", sanitizeUIErr(err)
 }
 
 func sanitizeUIErr(err error) string {
@@ -894,7 +894,7 @@ func sanitizeUIErr(err error) string {
 	s := err.Error()
 	lower := strings.ToLower(s)
 	if strings.Contains(lower, "l2tppsk") || strings.Contains(lower, "password") {
-		return "Terjadi kesalahan (detail disembunyikan demi keamanan)."
+		return "An error occurred (details hidden for security)."
 	}
 	if len(s) > 240 {
 		return s[:240] + "…"

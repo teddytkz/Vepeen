@@ -15,7 +15,7 @@ import (
 func SyncRoutes(connectionName string, desired []string) error {
 	name := strings.TrimSpace(connectionName)
 	if name == "" {
-		return fmt.Errorf("nama koneksi kosong")
+		return fmt.Errorf("connection name is empty")
 	}
 	if err := validateConnectionName(name); err != nil {
 		return err
@@ -28,7 +28,7 @@ func SyncRoutes(connectionName string, desired []string) error {
 
 	existing, err := listRoutes(name)
 	if err != nil {
-		return fmt.Errorf("daftar rute profil: %w", err)
+		return fmt.Errorf("list profile routes: %w", err)
 	}
 
 	desiredSet := make(map[string]struct{}, len(desired))
@@ -44,7 +44,7 @@ func SyncRoutes(connectionName string, desired []string) error {
 	for p := range existingSet {
 		if _, ok := desiredSet[p]; !ok {
 			if err := removeRoute(name, p); err != nil {
-				return fmt.Errorf("hapus rute %s: %w", p, err)
+				return fmt.Errorf("remove route %s: %w", p, err)
 			}
 		}
 	}
@@ -52,7 +52,7 @@ func SyncRoutes(connectionName string, desired []string) error {
 	for p := range desiredSet {
 		if _, ok := existingSet[p]; !ok {
 			if err := addRoute(name, p); err != nil {
-				return fmt.Errorf("tambah rute %s: %w", p, err)
+				return fmt.Errorf("add route %s: %w", p, err)
 			}
 		}
 	}
@@ -130,14 +130,14 @@ func psQuote(s string) string {
 
 func validateConnectionName(name string) error {
 	if strings.ContainsAny(name, "\r\n\x00") {
-		return fmt.Errorf("nama koneksi tidak valid")
+		return fmt.Errorf("invalid connection name")
 	}
 	return nil
 }
 
 func validatePrefix(p string) error {
 	if _, err := normalizePrefix(p); err != nil {
-		return fmt.Errorf("prefiks tidak valid: %s", p)
+		return fmt.Errorf("invalid prefix: %s", p)
 	}
 	return nil
 }
@@ -148,9 +148,7 @@ func isSoftRouteListError(err error) bool {
 	}
 	msg := strings.ToLower(err.Error())
 	return strings.Contains(msg, "not found") ||
-		strings.Contains(msg, "tidak ditemukan") ||
 		strings.Contains(msg, "not recognized") ||
-		strings.Contains(msg, "tidak dikenali") ||
 		strings.Contains(msg, "no vpn") ||
 		strings.Contains(msg, "cannot find")
 }

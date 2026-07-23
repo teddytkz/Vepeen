@@ -24,10 +24,22 @@ func main() {
 		}
 	}()
 
+	// Single-instance guard: if another Vepeen is already running, bring its
+	// window to the foreground and exit this new instance immediately.
+	alreadyRunning, releaseMutex := ui.AcquireSingleInstance()
+	if alreadyRunning {
+		return
+	}
+	defer releaseMutex()
+
 	// Unique app ID helps Fyne preferences; secrets use Windows Credential Manager separately.
 	a := app.NewWithID("com.vepeen.app")
 	a.Settings().SetTheme(ui.NewTheme())
 	w := ui.NewMainWindow(a)
+
+	// System tray: icon in tray, X hides to tray, left-click shows window.
+	ui.SetupTray(a, w)
+
 	// ShowCentered centers the window (full monitor) and shows it before the
 	// first frame, eliminating the startup blink. a.Run() only starts the loop.
 	ui.ShowCentered(w)

@@ -91,11 +91,11 @@ try {
 // ProfileDiagnostics returns a short status line: SplitTunneling on/off and route count.
 func ProfileDiagnostics(name string) (string, error) {
 	script := fmt.Sprintf(`$c = Get-VpnConnection -Name %s -ErrorAction SilentlyContinue
-if ($null -eq $c) { 'profil tidak ada' }
+if ($null -eq $c) { 'profile-not-found' }
 else {
   $st = if ($c.SplitTunneling) { 'on' } else { 'off' }
   $rc = if ($null -eq $c.Routes) { 0 } else { @($c.Routes).Count }
-  "SplitTunneling=$st rute=$rc"
+  "SplitTunneling=$st routes=$rc"
 }`, psQuote(name))
 	out, err := runPowerShell(script)
 	if err != nil {

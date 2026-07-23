@@ -21,9 +21,9 @@ func (e *ParseError) Error() string {
 		snip = snip[:40] + "…"
 	}
 	if e.Msg != "" {
-		return fmt.Sprintf("Baris %d tidak valid: %q. %s", e.Line, snip, e.Msg)
+		return fmt.Sprintf("Line %d is invalid: %q. %s", e.Line, snip, e.Msg)
 	}
-	return fmt.Sprintf("Baris %d tidak valid: %q. Gunakan format IP atau CIDR (contoh 10.0.0.0/24).", e.Line, snip)
+	return fmt.Sprintf("Line %d is invalid: %q. Use IP or CIDR format (e.g. 10.0.0.0/24).", e.Line, snip)
 }
 
 // ParseLines parses multi-line text into normalized IPv4 CIDR prefixes.
@@ -67,25 +67,25 @@ func NormalizeList(items []string) ([]string, error) {
 func normalizePrefix(s string) (string, error) {
 	s = strings.TrimSpace(s)
 	if s == "" {
-		return "", fmt.Errorf("kosong")
+		return "", fmt.Errorf("empty")
 	}
 
 	// Reject IPv6 early (contains ':' and is not IPv4-mapped we care about for v1).
 	if strings.Contains(s, ":") {
-		return "", fmt.Errorf("IPv6 belum didukung")
+		return "", fmt.Errorf("IPv6 not yet supported")
 	}
 
 	if strings.Contains(s, "/") {
 		ip, ipNet, err := net.ParseCIDR(s)
 		if err != nil {
-			return "", fmt.Errorf("Gunakan format IP atau CIDR (contoh 10.0.0.0/24)")
+			return "", fmt.Errorf("use IP or CIDR format (e.g. 10.0.0.0/24)")
 		}
 		if ip.To4() == nil {
-			return "", fmt.Errorf("IPv6 belum didukung")
+			return "", fmt.Errorf("IPv6 not yet supported")
 		}
 		ones, bits := ipNet.Mask.Size()
 		if bits != 32 || ones < 0 || ones > 32 {
-			return "", fmt.Errorf("panjang prefiks tidak valid")
+			return "", fmt.Errorf("invalid prefix length")
 		}
 		// Canonical form: network address + prefix length.
 		return fmt.Sprintf("%s/%d", ipNet.IP.String(), ones), nil
@@ -93,7 +93,7 @@ func normalizePrefix(s string) (string, error) {
 
 	ip := net.ParseIP(s)
 	if ip == nil || ip.To4() == nil {
-		return "", fmt.Errorf("Gunakan format IP atau CIDR (contoh 10.0.0.0/24)")
+		return "", fmt.Errorf("use IP or CIDR format (e.g. 10.0.0.0/24)")
 	}
 	return ip.To4().String() + "/32", nil
 }
@@ -104,17 +104,17 @@ func normalizePrefix(s string) (string, error) {
 func normalizeEntry(s string) (string, error) {
 	s = strings.TrimSpace(s)
 	if s == "" {
-		return "", fmt.Errorf("kosong")
+		return "", fmt.Errorf("empty")
 	}
 	// IPv6 (contains ':') is unsupported in v1.
 	if strings.Contains(s, ":") {
-		return "", fmt.Errorf("IPv6 belum didukung")
+		return "", fmt.Errorf("IPv6 not yet supported")
 	}
 	if norm, err := normalizePrefix(s); err == nil {
 		return norm, nil
 	}
 	if !isDomainName(s) {
-		return "", fmt.Errorf("Gunakan format IP, CIDR, atau nama domain (contoh 10.0.0.0/24 atau example.com)")
+		return "", fmt.Errorf("use IP, CIDR, or domain name format (e.g. 10.0.0.0/24 or example.com)")
 	}
 	return strings.ToLower(s), nil
 }
@@ -175,7 +175,7 @@ func ResolveRoutes(ctx context.Context, entries []string) ([]string, error) {
 		domain := strings.ToLower(strings.TrimSpace(e))
 		addrs, err := lookupHost(ctx, domain)
 		if err != nil {
-			return nil, fmt.Errorf("gagal mengresolve domain %q: %w", domain, err)
+			return nil, fmt.Errorf("failed to resolve domain %q: %w", domain, err)
 		}
 		resolved := 0
 		for _, a := range addrs {
@@ -187,7 +187,7 @@ func ResolveRoutes(ctx context.Context, entries []string) ([]string, error) {
 			resolved++
 		}
 		if resolved == 0 {
-			return nil, fmt.Errorf("domain %q tidak memiliki alamat IPv4", domain)
+			return nil, fmt.Errorf("domain %q has no IPv4 address", domain)
 		}
 	}
 	return out, nil
