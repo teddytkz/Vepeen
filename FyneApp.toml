@@ -1,6 +1,7 @@
 [Details]
 Name = "Vepeen"
 ID = "com.vepeen.app"
+Icon = "docs/images/penelope.png"
 
 [Migrations]
 fyneDo = true

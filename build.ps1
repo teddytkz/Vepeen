@@ -1,26 +1,25 @@
 $ErrorActionPreference = "Stop"
 $env:CGO_ENABLED = "1"
 
-# --- Windows application manifest (Per-Monitor v2 DPI) -----------------------
-# The manifest is embedded as a compiled resource (rsrc.syso) so the linker
-# merges an RT_MANIFEST into bin/vepeen.exe. This declares dpiAwareness =
-# "PerMonitorV2, PerMonitor" (crisp on HiDPI, no DPI-virtualization flash) and
-# uiAccess=false, while keeping the GUI subsystem (no console).
+# --- Windows resources: icon + Per-Monitor v2 DPI manifest -------------------
+# Resources are embedded as compiled .syso files so the linker merges an
+# RT_GROUP_ICON and RT_MANIFEST into bin/vepeen.exe:
+#   - Icon:     winres/penelope.png  → all standard sizes (256…16 px)
+#   - Manifest: dpiAwareness = "per monitor v2", uiAccess = false
 #
-# One-time tool install (already done on this machine):
-#   go install github.com/akavel/rsrc@latest
+# One-time tool install:
+#   go install github.com/tc-hib/go-winres@latest
 #
-# To regenerate the .syso after editing vepeen.exe.manifest:
-#   rsrc -manifest vepeen.exe.manifest -o cmd/vepeen/rsrc.syso
-#
-# The committed cmd/vepeen/rsrc.syso is picked up automatically by `go build`,
-# so no extra step is required for a normal build.
-if (-not (Test-Path cmd/vepeen/rsrc.syso)) {
-    if (Get-Command rsrc -ErrorAction SilentlyContinue) {
-        rsrc -manifest vepeen.exe.manifest -o cmd/vepeen/rsrc.syso
+# To regenerate after changing winres/winres.json or winres/penelope.png:
+#   go-winres make --in winres/winres.json --out cmd/vepeen/rsrc
+# This produces cmd/vepeen/rsrc_windows_amd64.syso (and _386.syso), which
+# go build picks up automatically — no extra step for a normal build.
+if (-not (Test-Path cmd/vepeen/rsrc_windows_amd64.syso)) {
+    if (Get-Command go-winres -ErrorAction SilentlyContinue) {
+        go-winres make --in winres/winres.json --out cmd/vepeen/rsrc
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     } else {
-        Write-Warning "rsrc not found and cmd/vepeen/rsrc.syso is missing; manifest will not be embedded. Install with: go install github.com/akavel/rsrc@latest"
+        Write-Warning "go-winres not found and rsrc_windows_amd64.syso is missing; icon + manifest will not be embedded. Install with: go install github.com/tc-hib/go-winres@latest"
     }
 }
 

@@ -2,6 +2,28 @@
 
 ### Changed
 
+- [2026-07-23] **fix-014** Low: embed Penelope icon into `vepeen.exe` so Windows Explorer / taskbar / title bar show it (`docs/planning/fix-014-exe-icon.md`)
+  - **Root cause:** `cmd/vepeen/rsrc.syso` (1 132 bytes) contains only an `RT_MANIFEST` — the `-ico` flag was never passed to `rsrc`, so no `RT_ICON`/`RT_GROUP_ICON` resource was compiled in. `vepeen.exe.manifest` was also never committed.
+  - **Task 1** — recreate `vepeen.exe.manifest` (repo root): standard Per-Monitor v2 DPI + UAC `asInvoker` manifest; content matches what originally produced the committed `.syso`.
+  - **Task 2** — produce `docs/images/penelope.ico` from existing `docs/images/penelope.png`: `go install github.com/mat/besticon/ico/cmd/png2ico@latest` → `png2ico docs/images/penelope.ico docs/images/penelope.png` (multi-size 16/32/48/256 px). ImageMagick `magick -define icon:auto-resize` is an alternative.
+  - **Task 3** — regenerate `cmd/vepeen/rsrc.syso`: `rsrc -manifest vepeen.exe.manifest -ico docs/images/penelope.ico -o cmd/vepeen/rsrc.syso`. Result grows from ~1 KB to ~200–300 KB. Commit new `.syso`.
+  - **Task 4** — update `build.ps1`: add `-ico docs/images/penelope.ico` to both the comment (line ~14) and the conditional fallback invocation (line ~21) of `rsrc`.
+  - No Go source changes. `go build ./...` and `.\build.ps1` workflows unchanged.
+  - **Option A (quick alternative):** `fyne package -os windows -name Vepeen -appID com.vepeen.app -icon docs/images/penelope.png -release` handles everything automatically but outputs `Vepeen.exe` to CWD instead of `bin/`.
+  - **Agent:** Frontend Developer → Debugger/Reviewer
+
+- [2026-07-23] **app-icon** — Embed `docs/images/penelope.jpg` as the Fyne app icon and system tray icon.
+  - **Step 1 — Convert JPEG → PNG** (Fyne's `bundle` tool requires PNG):
+    `ffmpeg -i docs/images/penelope.jpg docs/images/penelope.png`
+  - **Step 2 — Install fyne CLI** (once, if not present in `%GOPATH%\bin`):
+    `go install fyne.io/fyne/v2/cmd/fyne@v2.8.0`
+  - **Step 3 — Generate bundle** from repo root:
+    `fyne bundle -name PenelopeIcon -package ui -o internal/ui/bundle.go docs/images/penelope.png`
+    Produces `internal/ui/bundle.go` — package `ui`, `var PenelopeIcon *fyne.StaticResource`.
+  - **Step 4 — `FyneApp.toml`** — add `Icon = "docs/images/penelope.png"` under `[Details]` so `fyne package` picks it up.
+  - **Step 5 — `cmd/vepeen/main.go`** — call `a.SetIcon(ui.PenelopeIcon)` immediately after `app.NewWithID`.
+  - `internal/ui/tray_windows.go` — **no change needed**; existing `a.Icon()` fallback logic already propagates the icon once `SetIcon` is called.
+
 - [2026-07-23] **quit-disconnect** Minor: auto-disconnect VPN on tray Quit.
   - `internal/ui/main_window.go` — `NewMainWindow` now returns `(fyne.Window, func())`. The second value is a `disconnectAndQuit` closure that: checks the controller's current status, fires `mgr.DisconnectFull` with a 5 s timeout if connected (best-effort, does not block beyond the timeout), then calls `a.Quit()`. No new imports.
   - `internal/ui/tray_windows.go` — `SetupTray` signature changed to `SetupTray(a fyne.App, w fyne.Window, onQuit func())`. The "Quit" menu item calls `onQuit()` instead of `a.Quit()`.
