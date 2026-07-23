@@ -1,0 +1,6 @@
+[Details]
+Name = "Vepeen"
+ID = "com.vepeen.app"
+
+[Migrations]
+fyneDo = true
