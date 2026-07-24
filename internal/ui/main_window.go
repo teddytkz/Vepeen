@@ -221,11 +221,11 @@ func (c *controller) build() fyne.CanvasObject {
 
 	c.routeAllCheck = newTealCheck("Route All Traffic", nil)
 
-	cardRoutes := card(container.NewVBox(
-		routesHeader,
-		helperText("Only these destinations route through the VPN."),
-		c.routesEntry,
+	cardRoutes := card(container.NewBorder(
+		container.NewVBox(routesHeader, helperText("Only these destinations route through the VPN.")),
 		c.routeAllCheck,
+		nil, nil,
+		c.routesEntry,
 	))
 
 	leftCol := container.NewBorder(
@@ -592,7 +592,7 @@ func (c *controller) startTraffic(name string) {
 							}
 							if sig != "" {
 								c.appendLog("VPN traffic: " + sig)
-								c.setStatus(vpn.StatusConnected, "Connected", "VPN traffic: "+sig)
+								c.setStatus(vpn.StatusConnected, "Connected", "Traffic Route On")
 							} else {
 								c.setStatus(vpn.StatusConnected, "Connected", "No active connections through the VPN.")
 							}

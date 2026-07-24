@@ -116,7 +116,7 @@ func (t *vepeenTheme) Font(style fyne.TextStyle) fyne.Resource {
 func (t *vepeenTheme) Size(name fyne.ThemeSizeName) float32 {
 	switch name {
 	case theme.SizeNameInputBorder:
-		return 0 // no pill stroke (see ColorNameInputBorder)
+		return 1 // caret width; border still invisible via ColorNameInputBorder=Transparent
 	case theme.SizeNameInputRadius, theme.SizeNameSelectionRadius:
 		return 11
 	case sizeNameLog:

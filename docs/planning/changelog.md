@@ -1,5 +1,15 @@
 ## [Unreleased]
 
+### Fixed
+
+- [2026-07-24] **fix-022** Critical: entry caret invisible because `SizeNameInputBorder` is `0` in `internal/ui/theme.go` — Fyne v2.8 uses that size as caret **width** in `entryContentRenderer.moveCursor`. One-liner: `return 0` → `return 1` (comment: caret width; border still invisible via `ColorNameInputBorder=Transparent`). Keep Primary teal; no custom Entry. See `docs/planning/fix-022-entry-caret-width.md`. Agent: Frontend Developer → Debugger/Reviewer.
+
+- [2026-07-24] **fix-021** Low: three UI polish items (status detail, routes height, entry caret). See `docs/planning/fix-021-ui-status-routes-cursor.md`.
+  - **Status detail:** in `(*controller).startTraffic` (`internal/ui/main_window.go`), when traffic exists keep `appendLog("VPN traffic: "+sig)` but change `setStatus` detail from `"VPN traffic: "+sig` to `"Traffic Route On"` (no URL/IP in footer). Empty-traffic detail unchanged.
+  - **Routes height:** rebuild `cardRoutes` in `build()` from `VBox(header, helper, routesEntry, routeAllCheck)` to `Border(top=header+helper, bottom=routeAllCheck, center=routesEntry)` so the multi-line entry expands into the empty space above the checkbox (mirror `cardLog`). Optionally bump `SetMinRowsVisible` 6→10 only if still short.
+  - **Caret (superseded by fix-022):** fix-021 assumed color (`ColorNamePrimary`); actual bug was caret **width** via `SizeNameInputBorder=0`. Do not Primary→white for caret. See fix-022.
+  - **Out of scope:** VPN backend, `ActiveConnections`, log detail format, README. Agent: Frontend Developer → Debugger/Reviewer.
+
 ### Added
 
 - [2026-07-24] **prd-006** Minor: add a "Route All Traffic" checkbox under the split-tunnel routes text area. When checked, all traffic routes through the VPN (split tunneling disabled, server default gateway used); default unchecked on open. Add `RouteAllTraffic bool` (`json:"routeAllTraffic"`) to `Config` + `Stored` in `internal/config/config.go` and thread through `Default()`, `DefaultStored()`, `Config()`, `withCreds`. In `internal/ui/main_window.go` add `routeAllCheck *tealCheck`, create via `newTealCheck("Route All Traffic", nil)` in `build()` (below helper text), set from config in `applyConfig`, write in `onSave`, pass in `onConnect`, and relax the empty-routes guard in `validateConnect` when checked. In `internal/vpn/manager.go` add `RouteAllTraffic bool` to `ConnectRequest` and, in `ConnectFull`, skip the empty-prefix guard + `ensureSplitTunnelingFn` + `syncRoutesFn` + `EnforceSplitTunnel` when set (NAT-T, `DisconnectAllExcept`, `connectFn` still run). Routes text area stays editable but unused when checked. Agent: Backend Developer → Debugger/Reviewer.
