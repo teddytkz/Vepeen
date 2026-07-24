@@ -195,15 +195,15 @@ func (c *controller) build() fyne.CanvasObject {
 
 	c.userEntry = widget.NewEntry()
 	c.userEntry.SetPlaceHolder("Username")
-	var passField fyne.CanvasObject
-	c.passEntry, passField = passwordWithToggle()
+	c.passEntry = widget.NewPasswordEntry()
+	c.passEntry.SetPlaceHolder("Password")
 	c.rememberCheck = newTealCheck("Remember credentials", nil)
 	c.rememberCheck.SetChecked(true)
 
 	cardCreds := card(container.NewVBox(
 		sectionLabel("CREDENTIALS"),
 		c.userEntry,
-		passField,
+		c.passEntry,
 		c.rememberCheck,
 		helperText("Leave blank to use credentials saved in Keychain."),
 	))

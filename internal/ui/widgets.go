@@ -345,27 +345,6 @@ func (r *tealCheckRenderer) Objects() []fyne.CanvasObject {
 
 func (r *tealCheckRenderer) Destroy() {}
 
-// passwordWithToggle returns a password entry overlaid with a trailing mono
-// "show"/"hide" button that flips masking. The entry is returned so the caller
-// can read/set its text.
-func passwordWithToggle() (*widget.Entry, fyne.CanvasObject) {
-	e := widget.NewPasswordEntry()
-	e.SetPlaceHolder("Password")
-	toggle := widget.NewButton("show", nil)
-	toggle.Importance = widget.LowImportance
-	toggle.OnTapped = func() {
-		e.Password = !e.Password
-		if e.Password {
-			toggle.SetText("show")
-		} else {
-			toggle.SetText("hide")
-		}
-		e.Refresh()
-	}
-	// Border layout: entry fills, toggle pinned right.
-	return e, container.NewBorder(nil, nil, nil, toggle, e)
-}
-
 // primaryButton styles a teal-filled CTA with dark text (design footer CTA).
 func primaryButton(label string, tapped func()) *widget.Button {
 	b := widget.NewButton(label, tapped)
