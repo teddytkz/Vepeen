@@ -144,8 +144,12 @@ func (m *Manager) ConnectFull(ctx context.Context, req ConnectRequest, progress 
 	}
 
 	notify(PhaseSplitEnforce)
-	if _, eerr := EnforceSplitTunnel(name); eerr != nil {
-		// best-effort; do not fail connect
+	if msg, eerr := EnforceSplitTunnel(name, prefixes); eerr != nil {
+		// best-effort; do not fail connect, but surface why split tunnel may be off
+		log.Printf("ConnectFull: split tunnel enforce: %s", shared.SanitizeOutput(eerr.Error()))
+		warnings = append(warnings, "Split tunnel not fully applied: "+shared.SanitizeOutput(eerr.Error()))
+	} else if msg != "" {
+		warnings = append(warnings, msg)
 	}
 	if ctx.Err() != nil {
 		return nil, shared.NewUserError("canceled", "Cancelled", "Connection cancelled.")

@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"vepeen/internal/route"
 	"vepeen/internal/vpn/shared"
 )
 
@@ -137,8 +138,12 @@ func ProfileExists(name string) (bool, error) {
 	return false, nil
 }
 
-// EnforceSplitTunnel is handled by route.SyncRoutes on macOS; nothing to do here.
-func EnforceSplitTunnel(name string) (string, error) { return "", nil }
+// EnforceSplitTunnel applies split tunnel AFTER the tunnel is up (the only point
+// ppp0 exists on macOS): it removes the VPN's default route and adds the desired
+// prefixes to the tunnel interface, via one admin prompt. See route.ApplySplitTunnel.
+func EnforceSplitTunnel(name string, prefixes []string) (string, error) {
+	return route.ApplySplitTunnel(prefixes)
+}
 
 // ProfileDiagnostics returns the raw scutil status for troubleshooting.
 func ProfileDiagnostics(name string) (string, error) {

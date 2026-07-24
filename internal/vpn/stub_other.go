@@ -39,8 +39,8 @@ func ProfileExists(name string) (bool, error) {
 	return false, unsupported()
 }
 
-// EnforceSplitTunnel is not supported outside Windows.
-func EnforceSplitTunnel(name string) (string, error) { return "", unsupported() }
+// EnforceSplitTunnel is not supported outside Windows/macOS.
+func EnforceSplitTunnel(name string, prefixes []string) (string, error) { return "", unsupported() }
 
 // ProfileDiagnostics is not supported outside Windows.
 func ProfileDiagnostics(name string) (string, error) { return "", unsupported() }
