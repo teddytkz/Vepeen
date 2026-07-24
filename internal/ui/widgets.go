@@ -440,6 +440,7 @@ func (l *logView) rebuild() {
 	}
 	l.rt.Segments = segs
 	l.rt.Refresh()
+	l.scroll.Refresh()
 	l.scroll.ScrollToBottom()
 }
 

@@ -364,7 +364,8 @@ func classifyLog(msg string) logKind {
 	l := strings.ToLower(msg)
 	switch {
 	case strings.Contains(l, "connected") || strings.Contains(l, "applied") ||
-		strings.Contains(l, "saved") || strings.Contains(l, "active"):
+		strings.Contains(l, "saved") || strings.Contains(l, "active") ||
+		strings.Contains(l, "vpn traffic"):
 		return logOK
 	case strings.Contains(l, "fail") || strings.Contains(l, "error") ||
 		strings.Contains(l, "skipped") || strings.Contains(l, "not ") ||
@@ -440,7 +441,7 @@ func (c *controller) loadInitial() {
 		fyne.Do(func() {
 			if st == vpn.StatusConnected {
 				c.state = vpn.StatusConnected
-				c.setStatus(vpn.StatusConnected, "Connected", "Only the listed IPs/CIDRs route through the VPN.")
+				c.setStatus(vpn.StatusConnected, "Connected", "No active connections through the VPN.")
 				c.refreshLocalIP()
 				c.appendLog("Already connected (OS status).")
 				c.applyEnablement()
@@ -580,12 +581,16 @@ func (c *controller) startTraffic(name string) {
 					sig := strings.Join(parts, ", ")
 					if sig != prevConns {
 						prevConns = sig
-						msg := "No active connections through the VPN."
-						if sig != "" {
-							msg = "VPN traffic: " + sig
-						}
 						fyne.Do(func() {
-							c.appendLog(msg)
+							if c.state != vpn.StatusConnected {
+								return
+							}
+							if sig != "" {
+								c.appendLog("VPN traffic: " + sig)
+								c.setStatus(vpn.StatusConnected, "Connected", "VPN traffic: "+sig)
+							} else {
+								c.setStatus(vpn.StatusConnected, "Connected", "No active connections through the VPN.")
+							}
 						})
 					}
 				}
@@ -1036,7 +1041,7 @@ func (c *controller) onConnect() {
 					}
 				}
 			} else {
-				c.setStatus(vpn.StatusConnected, "Connected", "Only the listed IPs/CIDRs route through the VPN.")
+				c.setStatus(vpn.StatusConnected, "Connected", "No active connections through the VPN.")
 				c.appendLog("Connected. Split tunnel active.")
 				// Diagnostics (raw scutil dump) go to the OS log only — it's one huge
 				// unbreakable line, useless and layout-breaking in the UI.
