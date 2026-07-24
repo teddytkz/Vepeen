@@ -142,9 +142,7 @@ type controller struct {
 	logView       *logView
 
 	btnSave     *widget.Button
-	btnDisc     *widget.Button
 	btnConn     *widget.Button
-	btnCancel   *widget.Button
 	btnClearLog *widget.Button
 	statusPri   *widget.Label
 	statusDet   *widget.Label
@@ -292,13 +290,11 @@ func (c *controller) build() fyne.CanvasObject {
 	)
 
 	c.btnSave = widget.NewButton("Save Settings", c.onSave)
-	c.btnDisc = widget.NewButton("Disconnect", c.onDisconnect)
-	c.btnCancel = widget.NewButton("Cancel", c.onCancel)
-	c.btnConn = widget.NewButton("Connect", c.onConnect)
+	c.btnConn = widget.NewButton("Connect", c.onHeroTap)
 	c.btnConn.Importance = widget.HighImportance
 
 	footer := container.NewPadded(container.NewBorder(nil, nil, footerLeft, nil,
-		container.NewHBox(layout.NewSpacer(), c.btnSave, c.btnDisc, c.btnCancel, c.btnConn),
+		container.NewHBox(layout.NewSpacer(), c.btnSave, c.btnConn),
 	))
 
 	// Title strip (fix #5): app name left, protocol label right, in mono.
@@ -749,19 +745,25 @@ func (c *controller) syncVisualState(primary, detail string) {
 	c.syncIdentity()
 }
 
-// syncCTA relabels/recolors the footer primary button per state (hero + CTA
-// share the same action via onHeroTap / the button callbacks).
+// syncCTA updates the single call-to-action button's label and importance
+// to reflect the current connection state.
 func (c *controller) syncCTA() {
 	if c.btnConn == nil {
 		return
 	}
-	// The four footer buttons are all present; applyEnablement decides which are
-	// enabled. Here we only adjust the primary button's label/importance.
 	switch c.state {
+	case vpn.StatusDisconnected, vpn.StatusError, vpn.StatusUnknown:
+		c.btnConn.SetText("Connect")
+		c.btnConn.Importance = widget.HighImportance
+	case vpn.StatusConnecting:
+		c.btnConn.SetText("Cancel")
+		c.btnConn.Importance = widget.DangerImportance
 	case vpn.StatusConnected:
-		c.btnConn.SetText("Connect")
-	default:
-		c.btnConn.SetText("Connect")
+		c.btnConn.SetText("Disconnect")
+		c.btnConn.Importance = widget.MediumImportance
+	case vpn.StatusDisconnecting:
+		c.btnConn.SetText("Disconnecting…")
+		c.btnConn.Importance = widget.MediumImportance
 	}
 	c.btnConn.Refresh()
 }
@@ -795,7 +797,6 @@ func (c *controller) applyEnablement() {
 	formEnabled := c.state == vpn.StatusDisconnected || c.state == vpn.StatusError
 	busyConnect := c.state == vpn.StatusConnecting
 	busyDisc := c.state == vpn.StatusDisconnecting
-	connected := c.state == vpn.StatusConnected
 
 	setEntry := func(e *widget.Entry, on bool) {
 		if on {
@@ -819,27 +820,19 @@ func (c *controller) applyEnablement() {
 		c.btnSave.Enable()
 	}
 
-	if formEnabled && !c.busy {
+	// Single CTA button enablement, driven by state + generic busy lock.
+	switch c.state {
+	case vpn.StatusDisconnected, vpn.StatusError, vpn.StatusUnknown,
+		vpn.StatusConnecting, vpn.StatusConnected:
 		c.btnConn.Enable()
-	} else {
+	default: // Disconnecting
 		c.btnConn.Disable()
 	}
-
-	if connected && !c.busy {
-		c.btnDisc.Enable()
-	} else {
-		c.btnDisc.Disable()
-	}
-
-	if busyConnect || busyDisc {
+	// Disable the CTA only when busy in a non-cancellable state, or while
+	// disconnecting. During Connecting the button is "Cancel" and must stay
+	// enabled so the user can abort the connection.
+	if c.busy && c.state != vpn.StatusConnecting {
 		c.btnConn.Disable()
-		c.btnDisc.Disable()
-	}
-
-	if busyConnect {
-		c.btnCancel.Enable()
-	} else {
-		c.btnCancel.Disable()
 	}
 }
 

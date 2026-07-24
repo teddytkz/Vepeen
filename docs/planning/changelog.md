@@ -2,6 +2,8 @@
 
 ### Changed
 
+- [2026-07-24] **fix-020** Low: merge the three footer buttons (Connect / Cancel / Disconnect) into a single stateful CTA button. Remove `btnDisc` and `btnCancel` struct fields + creation lines (lines 145-147, 295-296) and their footer layout references (line 301 → `container.NewHBox(layout.NewSpacer(), c.btnSave, c.btnConn)`). Rewire `c.btnConn` `OnTapped` to the existing `c.onHeroTap` router (line 297). Rewrite `syncCTA()` (lines 752-766) to set label + `Importance` by state: Disconnected/Error/Unknown → "Connect" (High), Connecting → "Cancel" (Danger/Warning), Connected → "Disconnect" (Medium/Low), Disconnecting → "Disconnecting…". Rewrite the button-enable block in `applyEnablement()` (lines 790-843) to drive only `c.btnConn` (enabled for Disconnected/Error/Unknown/Connecting/Connected, disabled for Disconnecting or generic `busy`); delete all `btnDisc`/`btnCancel` references and now-unused `busyConnect`/`busyDisc`/`connected` vars. `onConnect`/`onCancel`/`onDisconnect` unchanged. `go build ./...` and `go vet ./internal/ui/...` must pass. Agent: Frontend Developer → Debugger/Reviewer.
+
 - [2026-07-24] **ui-rate-ping-format** Minor: fix ping and traffic-rate display units.
   - **Ping display (no space before "ms"):** remove the space so values read `11ms` instead of `11 ms`.
     - `internal/ui/ping_windows.go` (lines 24, 27): change `" — <1 ms"` → `" — <1ms"` and `" — " + strconv.FormatUint(...) + " ms"` → `" — " + strconv.FormatUint(...) + "ms"`.
