@@ -37,6 +37,9 @@ type ConnectRequest struct {
 	RoutesText string
 	// Routes optional pre-parsed prefixes; if empty, RoutesText is parsed.
 	Routes []string
+	// RouteAllTraffic, when true, skips split-tunnel setup and routes all
+	// traffic through the VPN (an empty routes list is valid in this mode).
+	RouteAllTraffic bool
 }
 
 // Manager orchestrates route sync and dial for an existing Windows VPN profile.
@@ -49,6 +52,8 @@ type Manager struct {
 	natCheckFn func() (NATResult, error)
 	// ensureSplitTunnelingFn enables split tunneling on the profile; overridable for tests.
 	ensureSplitTunnelingFn func(string) error
+	// disableSplitTunnelingFn disables split tunneling on the profile; overridable for tests.
+	disableSplitTunnelingFn func(string) error
 }
 
 // NewManager returns a VPN manager.
@@ -58,6 +63,7 @@ func NewManager() *Manager {
 		connectFn:              Connect,
 		natCheckFn:             EnsureNATRegistry,
 		ensureSplitTunnelingFn: EnsureSplitTunneling,
+		disableSplitTunnelingFn: DisableSplitTunneling,
 	}
 }
 
@@ -109,7 +115,7 @@ func (m *Manager) ConnectFull(ctx context.Context, req ConnectRequest, progress 
 		return nil, shared.NewUserError("validation", "Cannot connect", rerr.Error())
 	}
 	prefixes = resolved
-	if len(prefixes) == 0 {
+	if len(prefixes) == 0 && !req.RouteAllTraffic {
 		return nil, shared.NewUserError("validation", "Cannot connect", "Enter at least one destination IP, CIDR, or domain name for split tunnel (e.g. 10.0.0.0/24 or example.com).")
 	}
 
@@ -118,21 +124,29 @@ func (m *Manager) ConnectFull(ctx context.Context, req ConnectRequest, progress 
 		// best-effort; ignore so connect can proceed
 		_ = derr
 	}
+	if req.RouteAllTraffic {
+		notify(PhaseSplitTunnelEnsure)
+		if err := m.disableSplitTunnelingFn(name); err != nil {
+			log.Printf("ConnectFull: failed to disable split tunnel: %s Connection will continue; all-traffic routing may not apply.", shared.SanitizeOutput(err.Error()))
+			warnings = append(warnings, "Failed to disable split tunnel: "+shared.SanitizeOutput(err.Error())+". All-traffic routing may not apply.")
+		}
+	} else
+	if !req.RouteAllTraffic {
+		notify(PhaseSplitTunnelEnsure)
+		if err := m.ensureSplitTunnelingFn(name); err != nil {
+			log.Printf("ConnectFull: failed to enable split tunnel: %s Connection will continue; routes may not be applied.", shared.SanitizeOutput(err.Error()))
+			warnings = append(warnings, "Failed to enable split tunnel: "+shared.SanitizeOutput(err.Error())+". Connection will continue; split tunnel routes may not be applied.")
+		}
 
-	notify(PhaseSplitTunnelEnsure)
-	if err := m.ensureSplitTunnelingFn(name); err != nil {
-		log.Printf("ConnectFull: failed to enable split tunnel: %s Connection will continue; routes may not be applied.", shared.SanitizeOutput(err.Error()))
-		warnings = append(warnings, "Failed to enable split tunnel: "+shared.SanitizeOutput(err.Error())+". Connection will continue; split tunnel routes may not be applied.")
-	}
-
-	notify(PhaseSyncRoutes)
-	if err := m.syncRoutesFn(name, prefixes); err != nil {
-		// Best-effort: do not abort connect for a transient route-sync error.
-		log.Printf("ConnectFull: route sync skipped: %s Connection will continue; split tunnel routes may need to be re-saved.", shared.SanitizeOutput(err.Error()))
-		warnings = append(warnings, "Route sync skipped: "+shared.SanitizeOutput(err.Error())+". Connection will continue; split tunnel routes may need to be re-saved.")
-	}
-	if ctx.Err() != nil {
-		return nil, shared.NewUserError("canceled", "Cancelled", "Connection cancelled.")
+		notify(PhaseSyncRoutes)
+		if err := m.syncRoutesFn(name, prefixes); err != nil {
+			// Best-effort: do not abort connect for a transient route-sync error.
+			log.Printf("ConnectFull: route sync skipped: %s Connection will continue; split tunnel routes may need to be re-saved.", shared.SanitizeOutput(err.Error()))
+			warnings = append(warnings, "Route sync skipped: "+shared.SanitizeOutput(err.Error())+". Connection will continue; split tunnel routes may need to be re-saved.")
+		}
+		if ctx.Err() != nil {
+			return nil, shared.NewUserError("canceled", "Cancelled", "Connection cancelled.")
+		}
 	}
 
 	notify(PhaseDial)
@@ -143,16 +157,18 @@ func (m *Manager) ConnectFull(ctx context.Context, req ConnectRequest, progress 
 		return nil, shared.NewUserError("canceled", "Cancelled", "Connection cancelled.")
 	}
 
-	notify(PhaseSplitEnforce)
-	if msg, eerr := EnforceSplitTunnel(name, prefixes); eerr != nil {
-		// best-effort; do not fail connect, but surface why split tunnel may be off
-		log.Printf("ConnectFull: split tunnel enforce: %s", shared.SanitizeOutput(eerr.Error()))
-		warnings = append(warnings, "Split tunnel not fully applied: "+shared.SanitizeOutput(eerr.Error()))
-	} else if msg != "" {
-		warnings = append(warnings, msg)
-	}
-	if ctx.Err() != nil {
-		return nil, shared.NewUserError("canceled", "Cancelled", "Connection cancelled.")
+	if !req.RouteAllTraffic {
+		notify(PhaseSplitEnforce)
+		if msg, eerr := EnforceSplitTunnel(name, prefixes); eerr != nil {
+			// best-effort; do not fail connect, but surface why split tunnel may be off
+			log.Printf("ConnectFull: split tunnel enforce: %s", shared.SanitizeOutput(eerr.Error()))
+			warnings = append(warnings, "Split tunnel not fully applied: "+shared.SanitizeOutput(eerr.Error()))
+		} else if msg != "" {
+			warnings = append(warnings, msg)
+		}
+		if ctx.Err() != nil {
+			return nil, shared.NewUserError("canceled", "Cancelled", "Connection cancelled.")
+		}
 	}
 
 	notify(PhaseDone)

@@ -140,3 +140,25 @@ if ($c.SplitTunneling) { Write-Output 'already-on' } else {
 	}
 	return nil
 }
+
+// DisableSplitTunneling disables split tunneling on the named Windows VPN
+// profile so all traffic routes through the tunnel (the VPN default gateway
+// is used). Best-effort.
+func DisableSplitTunneling(name string) error {
+	if err := shared.ValidateName(name); err != nil {
+		return err
+	}
+	script := fmt.Sprintf(`$ErrorActionPreference='Stop'
+$name = %s
+$c = Get-VpnConnection -Name $name -ErrorAction SilentlyContinue
+if ($null -eq $c) { Write-Output 'no-profile'; exit 0 }
+if (-not $c.SplitTunneling) { Write-Output 'already-off' } else {
+  Set-VpnConnection -Name $name -SplitTunneling $false -ErrorAction Stop
+  Write-Output 'disabled'
+}`, psQuote(name))
+	out, err := runPowerShell(script)
+	if err != nil {
+		return shared.MapExecError("DisableSplitTunneling", err, out)
+	}
+	return nil
+}

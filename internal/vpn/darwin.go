@@ -53,6 +53,9 @@ func EnsureNATRegistry() (shared.NATResult, error) { return shared.NATOK, nil }
 // EnsureSplitTunneling is a no-op; split tunnel is applied as routes post-connect.
 func EnsureSplitTunneling(name string) error { return nil }
 
+// DisableSplitTunneling is a no-op on macOS; all-traffic routing is the default.
+func DisableSplitTunneling(name string) error { return nil }
+
 // Connect starts the named VPN service via networksetup, the same connect path
 // the macOS menu bar uses. This matters for L2TP/IPSec: `scutil --nc start` does
 // NOT load the IPSec Shared Secret (PSK) from the profile, so it fails with

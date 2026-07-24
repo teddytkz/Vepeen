@@ -48,6 +48,9 @@ func ProfileDiagnostics(name string) (string, error) { return "", unsupported() 
 // EnsureSplitTunneling is not supported outside Windows.
 func EnsureSplitTunneling(name string) error { return unsupported() }
 
+// DisableSplitTunneling is not supported outside Windows.
+func DisableSplitTunneling(name string) error { return unsupported() }
+
 // PurgeOrphanScripts is a no-op outside Windows.
 func PurgeOrphanScripts() {}
 

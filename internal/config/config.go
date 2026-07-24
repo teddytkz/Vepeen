@@ -33,6 +33,7 @@ type Config struct {
 	SelectedProfile     string   `json:"selectedProfile"`
 	Routes              []string `json:"routes"`
 	RememberCredentials bool     `json:"rememberCredentials"`
+	RouteAllTraffic     bool     `json:"routeAllTraffic"`
 }
 
 // Stored is the full persisted state: non-secret settings plus per-profile
@@ -41,6 +42,7 @@ type Stored struct {
 	SelectedProfile     string               `json:"selectedProfile"`
 	Routes              []string             `json:"routes"`
 	RememberCredentials bool                 `json:"rememberCredentials"`
+	RouteAllTraffic     bool                 `json:"routeAllTraffic"`
 	Credentials         map[string]CredEntry `json:"credentials"` // keyed by profile name
 }
 
@@ -58,6 +60,7 @@ func Default() Config {
 		SelectedProfile:     "",
 		Routes:              []string{},
 		RememberCredentials: true,
+		RouteAllTraffic:     false,
 	}
 }
 
@@ -67,6 +70,7 @@ func DefaultStored() Stored {
 		SelectedProfile:     "",
 		Routes:              []string{},
 		RememberCredentials: true,
+		RouteAllTraffic:     false,
 		Credentials:         map[string]CredEntry{},
 	}
 }
@@ -77,6 +81,7 @@ func (s Stored) Config() Config {
 		SelectedProfile:     s.SelectedProfile,
 		Routes:              s.Routes,
 		RememberCredentials: s.RememberCredentials,
+		RouteAllTraffic:     s.RouteAllTraffic,
 	}
 }
 
@@ -86,6 +91,7 @@ func (c Config) withCreds(creds map[string]CredEntry) Stored {
 		SelectedProfile:     c.SelectedProfile,
 		Routes:              c.Routes,
 		RememberCredentials: c.RememberCredentials,
+		RouteAllTraffic:     c.RouteAllTraffic,
 		Credentials:         creds,
 	}
 }

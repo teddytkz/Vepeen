@@ -148,6 +148,7 @@ type controller struct {
 	statusDet   *widget.Label
 
 	rememberCheck *tealCheck
+	routeAllCheck *tealCheck
 	hostArea      *widget.Entry
 	dlLabel       *widget.Label
 	tickBusy      atomic.Bool
@@ -218,10 +219,13 @@ func (c *controller) build() fyne.CanvasObject {
 	c.routeCount = mono("0 routes", 11, textFaint)
 	routesHeader := container.NewBorder(nil, nil, sectionLabel("SPLIT TUNNEL ROUTES"), c.routeCount)
 
-	cardRoutes := card(container.NewBorder(
-		container.NewVBox(routesHeader, helperText("Only these destinations route through the VPN.")),
-		nil, nil, nil,
-		c.routesEntry,
+	c.routeAllCheck = newTealCheck("Route All Traffic", nil)
+
+cardRoutes := card(container.NewVBox(
+	routesHeader,
+	helperText("Only these destinations route through the VPN."),
+	c.routesEntry,
+	c.routeAllCheck,
 	))
 
 	leftCol := container.NewBorder(
@@ -463,6 +467,7 @@ func (c *controller) applyConfig(cfg config.Config) {
 	if len(cfg.Routes) > 0 {
 		c.routesEntry.SetText(strings.Join(cfg.Routes, "\n"))
 	}
+	c.routeAllCheck.SetChecked(cfg.RouteAllTraffic)
 }
 
 // onProfileChanged updates the selected connection. The routes text is global
@@ -882,6 +887,7 @@ func (c *controller) onSave() {
 	c.stored.SelectedProfile = name
 	c.stored.Routes = routes
 	c.stored.RememberCredentials = c.rememberCheck.Checked
+	c.stored.RouteAllTraffic = c.routeAllCheck.Checked
 	c.cfg = c.stored.Config()
 	cfg := c.stored
 	keepState := c.state
@@ -956,10 +962,11 @@ func (c *controller) onConnect() {
 	c.connectionName = c.profileSelect.Selected
 
 	req := vpn.ConnectRequest{
-		Name:       name,
-		Username:   strings.TrimSpace(c.userEntry.Text),
-		Password:   c.passEntry.Text,
-		RoutesText: c.routesEntry.Text,
+		Name:           name,
+		Username:       strings.TrimSpace(c.userEntry.Text),
+		Password:       c.passEntry.Text,
+		RoutesText:     c.routesEntry.Text,
+		RouteAllTraffic: c.routeAllCheck.Checked,
 	}
 
 	// Fall back to stored credentials when the form is empty and remember is on.
@@ -1131,7 +1138,7 @@ func (c *controller) validateConnect() (string, fyne.Focusable) {
 	if err != nil {
 		return err.Error(), c.routesEntry
 	}
-	if len(prefixes) == 0 {
+	if len(prefixes) == 0 && !c.routeAllCheck.Checked {
 		return "Enter at least one IP, CIDR, or domain name for split tunnel.", c.routesEntry
 	}
 	return "", nil

@@ -43,6 +43,11 @@ func EnsureSplitTunneling(name string) error {
 	return win.EnsureSplitTunneling(name)
 }
 
+// DisableSplitTunneling disables split tunneling on the named profile.
+func DisableSplitTunneling(name string) error {
+	return win.DisableSplitTunneling(name)
+}
+
 // EnforceSplitTunnel removes a server-pushed default route if present. On Windows
 // routes are attached to the profile pre-dial, so prefixes are unused here.
 func EnforceSplitTunnel(name string, prefixes []string) (string, error) {
