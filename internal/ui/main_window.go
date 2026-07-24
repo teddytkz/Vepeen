@@ -535,6 +535,7 @@ func (c *controller) startTraffic(name string) {
 		defer ticker.Stop()
 		var prevRx, prevTx uint64
 		var havePrev bool
+		var prevConns string
 		for {
 			select {
 			case <-stop:
@@ -565,28 +566,29 @@ func (c *controller) startTraffic(name string) {
 					prevRx, prevTx = rx, tx
 				}
 
-				hostText := "No active TCP connections through the VPN"
-				if conns, cerr := vpn.ActiveConnections(name); cerr == nil && len(conns) > 0 {
-					var b strings.Builder
+				// Surface the hosts routed through the VPN in the activity log.
+				// Log only when the connection set changes to avoid flooding.
+				if conns, cerr := vpn.ActiveConnections(name); cerr == nil {
+					var parts []string
 					for _, ac := range conns {
 						if ac.Hostname != "" {
-							b.WriteString(ac.Hostname)
-							b.WriteString(" (")
-							b.WriteString(ac.RemoteAddr)
-							b.WriteString(":")
-							b.WriteString(ac.RemotePort)
-							b.WriteString(")\n")
+							parts = append(parts, ac.Hostname+" ("+ac.RemoteAddr+":"+ac.RemotePort+")")
 						} else {
-							b.WriteString(ac.RemoteAddr)
-							b.WriteString(":")
-							b.WriteString(ac.RemotePort)
-							b.WriteString("\n")
+							parts = append(parts, ac.RemoteAddr+":"+ac.RemotePort)
 						}
 					}
-					hostText = strings.TrimRight(b.String(), "\n")
+					sig := strings.Join(parts, ", ")
+					if sig != prevConns {
+						prevConns = sig
+						msg := "No active connections through the VPN."
+						if sig != "" {
+							msg = "VPN traffic: " + sig
+						}
+						fyne.Do(func() {
+							c.appendLog(msg)
+						})
+					}
 				}
-
-				_ = hostText
 				fyne.Do(func() {
 					if c.state != vpn.StatusConnected {
 						return

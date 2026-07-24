@@ -30,6 +30,20 @@ var (
 	darkOnAccent  = color.NRGBA{R: 0x05, G: 0x20, B: 0x1d, A: 0xff} // dark text on teal CTA
 )
 
+// Custom theme color names for activity-log rows. RichText segments only accept
+// a ColorName (not an arbitrary color.Color), so the exact log tokens are exposed
+// here and resolved in vepeenTheme.Color.
+const (
+	colorNameLogTs    fyne.ThemeColorName = "logTs"
+	colorNameLogInfo  fyne.ThemeColorName = "logInfo"
+	colorNameLogOK    fyne.ThemeColorName = "logOK"
+	colorNameLogWarn  fyne.ThemeColorName = "logWarn"
+	colorNameLogMuted fyne.ThemeColorName = "logMuted"
+)
+
+// sizeNameLog is the 11px font size used by activity-log rows.
+const sizeNameLog fyne.ThemeSizeName = "log"
+
 //go:embed fonts/JetBrainsMono-Regular.ttf
 var monoRegular []byte
 
@@ -74,6 +88,16 @@ func (t *vepeenTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant)
 		return cardBorder
 	case theme.ColorNameOverlayBackground, theme.ColorNameMenuBackground:
 		return bgDeep
+	case colorNameLogTs:
+		return monoFaint
+	case colorNameLogInfo:
+		return textSecondary
+	case colorNameLogOK:
+		return accentColor
+	case colorNameLogWarn:
+		return warnColor
+	case colorNameLogMuted:
+		return monoFaint
 	}
 	return t.Theme.Color(name, variant)
 }
@@ -94,6 +118,8 @@ func (t *vepeenTheme) Size(name fyne.ThemeSizeName) float32 {
 	case theme.SizeNameInputBorder:
 		return 0 // no pill stroke (see ColorNameInputBorder)
 	case theme.SizeNameInputRadius, theme.SizeNameSelectionRadius:
+		return 11
+	case sizeNameLog:
 		return 11
 	}
 	return t.Theme.Size(name)
