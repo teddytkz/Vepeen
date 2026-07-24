@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"image/color"
+	"log"
 	"net"
 	"strings"
 	"sync"
@@ -13,6 +14,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
@@ -42,21 +44,60 @@ func NewMainWindow(a fyne.App) (fyne.Window, func()) {
 	// avoids the teleport blink from the old deferred goroutine.
 	ctrl.loadInitial()
 
-	// disconnectAndQuit disconnects the VPN (best-effort, 5 s) then quits.
+	// disconnectAndQuit shows a non-dismissible progress dialog, disconnects the
+	// VPN (best-effort, 5 s timeout) off the UI thread, then quits. a.Quit() is
+	// guaranteed to run exactly once, after the dialog is hidden.
 	disconnectAndQuit := func() {
-		name := ctrl.profileName()
-		if name != "" {
-			done := make(chan struct{})
-			go func() {
-				defer close(done)
-				_ = ctrl.mgr.DisconnectFull(name)
-			}()
-			select {
-			case <-done:
-			case <-time.After(5 * time.Second):
-			}
+		if !ctrl.quitting.CompareAndSwap(false, true) {
+			return // already quitting
 		}
-		a.Quit()
+		name := ctrl.profileName()
+
+		statusLabel := widget.NewLabel("Disconnecting VPN…")
+		dlg := dialog.NewCustomWithoutButtons("Quitting Vepeen",
+			container.NewVBox(statusLabel, widget.NewProgressBarInfinite()), w)
+		w.Show() // ensure window visible even if quitting from tray
+		dlg.Show()
+
+		go func() {
+			if name != "" {
+				done := make(chan struct{})
+				go func() {
+					defer close(done)
+					// Only attempt disconnect if connected (or unknown-but-name-present).
+					st, _ := ctrl.mgr.Status(name)
+					if st == vpn.StatusConnected || st == vpn.StatusUnknown {
+						fyne.Do(func() { statusLabel.SetText("Disconnecting " + name + "…") })
+						log.Printf("quit: disconnecting %s…", name)
+						if err := ctrl.mgr.DisconnectFull(name); err != nil {
+							log.Printf("quit: disconnect result: %v", err)
+						} else {
+							log.Printf("quit: disconnect result: ok")
+						}
+						// Verify; retry once if still connected.
+						if st2, _ := ctrl.mgr.Status(name); st2 == vpn.StatusConnected {
+							fyne.Do(func() { statusLabel.SetText("Still connected, retrying…") })
+							log.Printf("quit: still connected, retrying disconnect %s…", name)
+							if err := ctrl.mgr.DisconnectFull(name); err != nil {
+								log.Printf("quit: retry disconnect result: %v", err)
+							} else {
+								log.Printf("quit: retry disconnect result: ok")
+							}
+						}
+					}
+				}()
+				select {
+				case <-done:
+				case <-time.After(5 * time.Second):
+					log.Printf("quit: disconnect timed out after 5s, proceeding to quit")
+				}
+			}
+			fyne.Do(func() { statusLabel.SetText("Closing…") })
+			fyne.Do(func() {
+				dlg.Hide()
+				a.Quit()
+			})
+		}()
 	}
 
 	w.SetMainMenu(fyne.NewMainMenu(
@@ -68,6 +109,7 @@ func NewMainWindow(a fyne.App) (fyne.Window, func()) {
 					ctrl.appendLog("Desktop shortcut created.")
 				}
 			}),
+			fyne.NewMenuItem("Quit", func() { disconnectAndQuit() }),
 		),
 	))
 
@@ -111,6 +153,7 @@ type controller struct {
 	hostArea      *widget.Entry
 	dlLabel       *widget.Label
 	tickBusy      atomic.Bool
+	quitting      atomic.Bool
 	ulLabel       *widget.Label
 	profiles      map[string]vpn.ProfileSummary // name -> summary (for ServerAddress)
 	trafficStop   chan struct{}                 // closed to stop the traffic ticker
