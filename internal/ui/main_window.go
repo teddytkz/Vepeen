@@ -284,8 +284,9 @@ func (c *controller) build() fyne.CanvasObject {
 	c.footerDot = &canvas.Circle{FillColor: ringIdle}
 	c.footerText = canvas.NewText("Disconnected · settings loaded", textMuted)
 	c.footerText.TextSize = 12.5
+	// Status dot sized to the text and vertically centered with the label.
 	footerLeft := container.NewHBox(
-		container.NewGridWrap(fyne.NewSize(10, 10), container.NewCenter(dotWrap(c.footerDot))),
+		container.NewCenter(container.NewGridWrap(fyne.NewSize(11, 11), c.footerDot)),
 		c.footerText,
 	)
 
@@ -306,11 +307,6 @@ func (c *controller) build() fyne.CanvasObject {
 
 	content := container.NewBorder(titleStrip, footer, nil, nil, container.NewPadded(body))
 	return container.NewStack(bgLayer(), content)
-}
-
-// dotWrap sizes a status circle to a small fixed square.
-func dotWrap(c *canvas.Circle) fyne.CanvasObject {
-	return container.NewGridWrap(fyne.NewSize(10, 10), c)
 }
 
 // updateRouteCount refreshes the "N routes" label: non-empty, non-# lines.
@@ -592,6 +588,9 @@ func (c *controller) startTraffic(name string) {
 
 				_ = hostText
 				fyne.Do(func() {
+					if c.state != vpn.StatusConnected {
+						return
+					}
 					c.setStat(c.statDown, dl)
 					c.setStat(c.statUp, ul)
 				})
@@ -681,7 +680,8 @@ func (c *controller) refreshLocalIP() {
 				ip := addrs[0].IP
 				mask := addrs[0].Mask
 				if ip != nil && mask != nil {
-					info = ip.String() + "/" + net.IP(mask).String()
+					ones, _ := mask.Size()
+					info = fmt.Sprintf("%s/%s/%d", ip.String(), net.IP(mask).String(), ones)
 					break
 				}
 			}
@@ -698,6 +698,8 @@ func (c *controller) refreshLocalIP() {
 				return
 			}
 			c.statusPri.SetText(c.statusPri.Text + " - " + info)
+			c.heroSub.Text = info
+			c.heroSub.Refresh()
 		})
 	}()
 }
@@ -779,14 +781,19 @@ func (c *controller) syncIdentity() {
 		c.heroSub.Text = "choose a profile to begin"
 	} else {
 		c.heroName.Text = name
-		host := ""
-		if p, ok := c.profiles[name]; ok {
-			host = strings.TrimSpace(p.ServerAddress)
-		}
-		if host != "" {
-			c.heroSub.Text = "L2TP/IPsec · " + host
+		if c.state == vpn.StatusConnected {
+			// heroSub shows the VPN local IP/subnet once refreshLocalIP resolves it.
+			c.heroSub.Text = "L2TP/IPsec · connected"
 		} else {
-			c.heroSub.Text = "L2TP/IPsec"
+			host := ""
+			if p, ok := c.profiles[name]; ok {
+				host = strings.TrimSpace(p.ServerAddress)
+			}
+			if host != "" {
+				c.heroSub.Text = "L2TP/IPsec · " + host
+			} else {
+				c.heroSub.Text = "L2TP/IPsec"
+			}
 		}
 	}
 	c.heroName.Refresh()
