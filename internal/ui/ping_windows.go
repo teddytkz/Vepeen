@@ -18,10 +18,10 @@ func pingGateway(host string) string {
 	}
 	rtt, err := vpn.PingHost(host, 1000)
 	if err != nil {
-		return host + " — timeout / no reply"
+		return "timeout / no reply"
 	}
 	if rtt == 0 {
-		return host + " — <1 ms"
+		return "<1ms"
 	}
-	return host + " — " + strconv.FormatUint(uint64(rtt), 10) + " ms"
+	return strconv.FormatUint(uint64(rtt), 10) + "ms"
 }

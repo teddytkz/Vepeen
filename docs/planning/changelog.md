@@ -1,5 +1,22 @@
 ## [Unreleased]
 
+### Changed
+
+- [2026-07-24] **ui-rate-ping-format** Minor: fix ping and traffic-rate display units.
+  - **Ping display (no space before "ms"):** remove the space so values read `11ms` instead of `11 ms`.
+    - `internal/ui/ping_windows.go` (lines 24, 27): change `" — <1 ms"` → `" — <1ms"` and `" — " + strconv.FormatUint(...) + " ms"` → `" — " + strconv.FormatUint(...) + "ms"`.
+    - `internal/ui/shims_darwin.go` (line 19): change `fmt.Sprintf("%d ms", ms)` → `fmt.Sprintf("%dms", ms)`.
+  - **Traffic rate (bits, not bytes):** `formatRate` in `internal/ui/main_window.go` (lines 524-530) currently divides bytes/sec by 1<<20 / 1<<10 and labels them `MB/s` / `KB/s`. The underlying value is actually Mbps (bits). Change to multiply bytes/sec by 8 to get bits/sec, then auto-format: if `bitsPerSec >= 1e6` return `fmt.Sprintf("%.1f Mbps", bitsPerSec/1e6)`, else return `fmt.Sprintf("%.0f Kbps", bitsPerSec/1e3)`. Keep the `func formatRate(bytesPerSec float64) string` signature unchanged.
+  - **Notes:** No changes to the traffic ticker call sites (~line 554, 590-598) — they still pass bytes/sec deltas; only the formatting/units change. No new files; follow existing Go conventions. `go build ./...` and `go vet ./internal/ui/...` must pass. Agent: Frontend Developer → Debugger/Reviewer.
+
+- [2026-07-24] **ui-ping-hide-host** Minor: ping display should show only the latency, not the host.
+  - `internal/ui/ping_windows.go` (`pingGateway`, lines 21-28): drop the `host + " — "` prefix from the three display branches; keep the `host` parameter (still used by `vpn.PingHost(host, 1000)`) and keep the `host == ""` → `"not connected"` branch unchanged.
+    - Timeout branch: `host + " — timeout / no reply"` → `"timeout / no reply"`.
+    - `<1ms` branch: `host + " — <1ms"` → `"<1ms"`.
+    - Numeric branch: `host + " — " + strconv.FormatUint(uint64(rtt), 10) + "ms"` → `strconv.FormatUint(uint64(rtt), 10) + "ms"`.
+  - **No change needed:** `internal/ui/shims_darwin.go` already returns `%dms` (no host); `internal/ui/ping_other.go` returns a static string.
+  - **Notes:** No new files; follow existing Go conventions. `go build ./...` and `go vet ./internal/ui/...` must pass. Agent: Frontend Developer → Debugger/Reviewer.
+
 ### Fixed
 
 - [2026-07-24] **fix-019** High: blank/white window when a second instance re-shows a tray-hidden window. Root cause: `bringExistingToFront()` in `internal/ui/single_instance_windows.go` used native Win32 `ShowWindow(SW_RESTORE)` + `SetForegroundWindow` on the first instance's HWND; after `w.Hide()` Fyne still thinks the window is hidden and skips repainting → blank canvas. Fix: replace the native-show path with an event-signaling mechanism — first instance creates `Global\VepeenShowEvent` and runs `ListenForShowSignal(w)` (goroutine waiting on `WaitForSingleObject`, then `fyne.Do(func(){ w.Show(); w.RequestFocus() })`); second instance calls `SignalExistingInstance()` (`AllowSetForegroundWindow(ASFW_ANY)` + `SetEvent`) and exits. `AcquireSingleInstance()` now creates the event on the owning instance and returns a release func that closes both mutex and event; `cmd/vepeen/main.go` calls `ui.ListenForShowSignal(w)` before `a.Run()`; `single_instance_other.go` gains a no-op `ListenForShowSignal`. Tray hide/show and first-launch `ShowCentered` unchanged. `go build ./...` and `go vet ./internal/ui/...` must pass. Agent: Backend Developer → Debugger/Reviewer.

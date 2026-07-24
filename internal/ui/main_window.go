@@ -521,12 +521,14 @@ func (c *controller) persistCredentials(name, user, pass string) {
 	_ = config.SaveStored(c.stored)
 }
 
-// formatRate renders a bytes-per-second value as KB/s or MB/s.
+// formatRate converts a bytes-per-second value to bits-per-second and renders
+// it as Kbps or Mbps (network rate units), auto-scaling to the appropriate unit.
 func formatRate(bytesPerSec float64) string {
-	if bytesPerSec >= float64(1<<20) {
-		return fmt.Sprintf("%.1f MB/s", bytesPerSec/float64(1<<20))
+	bitsPerSec := bytesPerSec * 8
+	if bitsPerSec >= 1e6 {
+		return fmt.Sprintf("%.1f Mbps", bitsPerSec/1e6)
 	}
-	return fmt.Sprintf("%d KB/s", int(bytesPerSec/float64(1<<10)))
+	return fmt.Sprintf("%.0f Kbps", bitsPerSec/1e3)
 }
 
 // startTraffic launches a ~1/sec ticker that samples live download/upload rates
@@ -551,7 +553,7 @@ func (c *controller) startTraffic(name string) {
 				}
 
 				rx, tx, err := vpn.TrafficCounters(name)
-				dl, ul := "0 KB/s", "0 KB/s"
+				dl, ul := "0 Kbps", "0 Kbps"
 				if err == nil {
 					if !havePrev && (rx > 0 || tx > 0) {
 						havePrev = true
