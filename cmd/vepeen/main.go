@@ -41,6 +41,9 @@ func main() {
 	// System tray: icon in tray, X hides to tray, left-click shows window.
 	ui.SetupTray(a, w, onQuit)
 
+	// Listen for show signals from a second instance launch (tray-hidden window).
+	ui.ListenForShowSignal(w)
+
 	// ShowCentered centers the window (full monitor) and shows it before the
 	// first frame, eliminating the startup blink. a.Run() only starts the loop.
 	ui.ShowCentered(w)
