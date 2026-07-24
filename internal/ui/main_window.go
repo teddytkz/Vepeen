@@ -828,7 +828,7 @@ func (c *controller) applyEnablement() {
 		c.btnClearLog.Enable()
 	}
 
-	if busyConnect || busyDisc || c.busy {
+	if busyConnect || busyDisc || c.state == vpn.StatusConnected || c.busy {
 		c.btnSave.Disable()
 	} else {
 		c.btnSave.Enable()
