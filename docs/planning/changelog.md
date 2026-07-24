@@ -2,6 +2,8 @@
 
 ### Fixed
 
+- [2026-07-24] **fix-023** Medium: traffic rate tiles wrong / hang / spike. Root causes in `startTraffic` (`internal/ui/main_window.go`): (1) first sample uses lifetime octets as 1s rate; (2) no elapsed-time normalization so multi-second deltas look like 1s; (3) `tickBusy` held across slow `ActiveConnections` → skipped ticks + hang; (4) dead `uint64` underflow check. Keep `formatRate` `*8` bits math. Fix sampling only + small `format_rate_test.go`. See `docs/planning/fix-023-traffic-rate-sampling.md`. Agent: Frontend Developer → Debugger/Reviewer.
+
 - [2026-07-24] **fix-022** Critical: entry caret invisible because `SizeNameInputBorder` is `0` in `internal/ui/theme.go` — Fyne v2.8 uses that size as caret **width** in `entryContentRenderer.moveCursor`. One-liner: `return 0` → `return 1` (comment: caret width; border still invisible via `ColorNameInputBorder=Transparent`). Keep Primary teal; no custom Entry. See `docs/planning/fix-022-entry-caret-width.md`. Agent: Frontend Developer → Debugger/Reviewer.
 
 - [2026-07-24] **fix-021** Low: three UI polish items (status detail, routes height, entry caret). See `docs/planning/fix-021-ui-status-routes-cursor.md`.

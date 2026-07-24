@@ -540,8 +540,10 @@ func (c *controller) startTraffic(name string) {
 		ticker := time.NewTicker(time.Second)
 		defer ticker.Stop()
 		var prevRx, prevTx uint64
+		var prevAt time.Time
 		var havePrev bool
 		var prevConns string
+		var connBusy atomic.Bool
 		for {
 			select {
 			case <-stop:
@@ -552,29 +554,53 @@ func (c *controller) startTraffic(name string) {
 				}
 
 				rx, tx, err := vpn.TrafficCounters(name)
-				dl, ul := "0 Kbps", "0 Kbps"
+				var dl, ul string
+				setRates := false
+				now := time.Now()
 				if err == nil {
-					if !havePrev && (rx > 0 || tx > 0) {
+					switch {
+					case rx == 0 && tx == 0:
+						// Soft-fail or empty: drop baseline so next real sample does not spike.
+						havePrev = false
+					case havePrev && (rx < prevRx || tx < prevTx):
+						// Counter reset / rebind: re-baseline, no rate this tick.
+						prevRx, prevTx, prevAt = rx, tx, now
+					case !havePrev:
+						prevRx, prevTx, prevAt = rx, tx, now
 						havePrev = true
-					}
-					if havePrev {
-						dRx := float64(rx - prevRx)
-						dTx := float64(tx - prevTx)
-						if dRx < 0 {
-							dRx = 0
+						dl, ul, setRates = "0 Kbps", "0 Kbps", true
+					default:
+						elapsed := now.Sub(prevAt).Seconds()
+						if elapsed >= 0.1 {
+							dl = formatRate(float64(rx-prevRx) / elapsed)
+							ul = formatRate(float64(tx-prevTx) / elapsed)
+							prevRx, prevTx, prevAt = rx, tx, now
+							setRates = true
 						}
-						if dTx < 0 {
-							dTx = 0
-						}
-						dl = formatRate(dRx)
-						ul = formatRate(dTx)
 					}
-					prevRx, prevTx = rx, tx
 				}
+				if setRates {
+					fyne.Do(func() {
+						if c.state != vpn.StatusConnected {
+							return
+						}
+						c.setStat(c.statDown, dl)
+						c.setStat(c.statUp, ul)
+					})
+				}
+				// Release before ActiveConnections (slow reverse DNS must not block rate ticks).
+				c.tickBusy.Store(false)
 
-				// Surface the hosts routed through the VPN in the activity log.
-				// Log only when the connection set changes to avoid flooding.
-				if conns, cerr := vpn.ActiveConnections(name); cerr == nil {
+				// Surface hosts routed through the VPN; skip if a poll is already in flight.
+				if !connBusy.CompareAndSwap(false, true) {
+					continue
+				}
+				go func() {
+					defer connBusy.Store(false)
+					conns, cerr := vpn.ActiveConnections(name)
+					if cerr != nil {
+						return
+					}
 					var parts []string
 					for _, ac := range conns {
 						if ac.Hostname != "" {
@@ -584,29 +610,22 @@ func (c *controller) startTraffic(name string) {
 						}
 					}
 					sig := strings.Join(parts, ", ")
-					if sig != prevConns {
-						prevConns = sig
-						fyne.Do(func() {
-							if c.state != vpn.StatusConnected {
-								return
-							}
-							if sig != "" {
-								c.appendLog("VPN traffic: " + sig)
-								c.setStatus(vpn.StatusConnected, "Connected", "Traffic Route On")
-							} else {
-								c.setStatus(vpn.StatusConnected, "Connected", "No active connections through the VPN.")
-							}
-						})
-					}
-				}
-				fyne.Do(func() {
-					if c.state != vpn.StatusConnected {
+					if sig == prevConns {
 						return
 					}
-					c.setStat(c.statDown, dl)
-					c.setStat(c.statUp, ul)
-				})
-				c.tickBusy.Store(false)
+					prevConns = sig
+					fyne.Do(func() {
+						if c.state != vpn.StatusConnected {
+							return
+						}
+						if sig != "" {
+							c.appendLog("VPN traffic: " + sig)
+							c.setStatus(vpn.StatusConnected, "Connected", "Traffic Route On")
+						} else {
+							c.setStatus(vpn.StatusConnected, "Connected", "No active connections through the VPN.")
+						}
+					})
+				}()
 			}
 		}
 	}()
