@@ -221,11 +221,11 @@ func (c *controller) build() fyne.CanvasObject {
 
 	c.routeAllCheck = newTealCheck("Route All Traffic", nil)
 
-cardRoutes := card(container.NewVBox(
-	routesHeader,
-	helperText("Only these destinations route through the VPN."),
-	c.routesEntry,
-	c.routeAllCheck,
+	cardRoutes := card(container.NewVBox(
+		routesHeader,
+		helperText("Only these destinations route through the VPN."),
+		c.routesEntry,
+		c.routeAllCheck,
 	))
 
 	leftCol := container.NewBorder(
@@ -962,10 +962,10 @@ func (c *controller) onConnect() {
 	c.connectionName = c.profileSelect.Selected
 
 	req := vpn.ConnectRequest{
-		Name:           name,
-		Username:       strings.TrimSpace(c.userEntry.Text),
-		Password:       c.passEntry.Text,
-		RoutesText:     c.routesEntry.Text,
+		Name:            name,
+		Username:        strings.TrimSpace(c.userEntry.Text),
+		Password:        c.passEntry.Text,
+		RoutesText:      c.routesEntry.Text,
 		RouteAllTraffic: c.routeAllCheck.Checked,
 	}
 

@@ -59,10 +59,10 @@ type Manager struct {
 // NewManager returns a VPN manager.
 func NewManager() *Manager {
 	return &Manager{
-		syncRoutesFn:           route.SyncRoutes,
-		connectFn:              Connect,
-		natCheckFn:             EnsureNATRegistry,
-		ensureSplitTunnelingFn: EnsureSplitTunneling,
+		syncRoutesFn:            route.SyncRoutes,
+		connectFn:               Connect,
+		natCheckFn:              EnsureNATRegistry,
+		ensureSplitTunnelingFn:  EnsureSplitTunneling,
 		disableSplitTunnelingFn: DisableSplitTunneling,
 	}
 }
@@ -130,8 +130,7 @@ func (m *Manager) ConnectFull(ctx context.Context, req ConnectRequest, progress 
 			log.Printf("ConnectFull: failed to disable split tunnel: %s Connection will continue; all-traffic routing may not apply.", shared.SanitizeOutput(err.Error()))
 			warnings = append(warnings, "Failed to disable split tunnel: "+shared.SanitizeOutput(err.Error())+". All-traffic routing may not apply.")
 		}
-	} else
-	if !req.RouteAllTraffic {
+	} else if !req.RouteAllTraffic {
 		notify(PhaseSplitTunnelEnsure)
 		if err := m.ensureSplitTunnelingFn(name); err != nil {
 			log.Printf("ConnectFull: failed to enable split tunnel: %s Connection will continue; routes may not be applied.", shared.SanitizeOutput(err.Error()))
