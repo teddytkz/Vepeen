@@ -8,6 +8,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
@@ -72,9 +73,11 @@ type heroRing struct {
 
 func newHeroRing(onTap func()) *heroRing {
 	h := &heroRing{onTap: onTap, state: "disconnected"}
-	h.ring = &canvas.Circle{StrokeColor: withAlpha(ringIdle, 0x59), StrokeWidth: 2, FillColor: color.Transparent}
-	h.glow = &canvas.Circle{FillColor: withAlpha(ringIdle, 0x22)}
-	h.disc = &canvas.Circle{FillColor: color.NRGBA{R: 0x08, G: 0x0e, B: 0x10, A: 0xff}}
+	// Two visible ring layers give the control depth (fix #3): a stroked outer
+	// ring and an inner state-colored glow, over a dark center disc.
+	h.ring = &canvas.Circle{StrokeColor: withAlpha(ringIdle, 0x66), StrokeWidth: 2, FillColor: color.Transparent}
+	h.glow = &canvas.Circle{FillColor: withAlpha(ringIdle, 0x33)}
+	h.disc = &canvas.Circle{FillColor: color.NRGBA{R: 0x0b, G: 0x13, B: 0x15, A: 0xff}}
 	h.spin = &canvas.Circle{StrokeColor: color.Transparent, StrokeWidth: 3, FillColor: color.Transparent}
 
 	h.kicker = canvas.NewText("TAP TO", ringIdle)
@@ -224,14 +227,20 @@ func (r *heroRingRenderer) Objects() []fyne.CanvasObject {
 
 func (r *heroRingRenderer) Destroy() { r.h.stopAnim() }
 
-// bgLayer returns the deep window background with a soft teal glow top-right,
-// approximating the brief's gradient + glow with a solid fill and radial gradient.
+// bgLayer returns the deep window background with a CONTAINED teal glow pinned to
+// the top-right corner, so the left column stays near-neutral dark (fix #2: a
+// full-size gradient tinted the whole window green).
 func bgLayer() fyne.CanvasObject {
-	base := canvas.NewRectangle(bgDeep)
-	glow := canvas.NewRadialGradient(withAlpha(accentColor, 0x22), color.Transparent)
-	glow.CenterOffsetX = 0.42
-	glow.CenterOffsetY = -0.42
-	return container.NewStack(base, glow)
+	base := canvas.NewRectangle(bgMid)
+	glow := canvas.NewRadialGradient(withAlpha(accentColor, 0x26), color.Transparent)
+	glow.Resize(fyne.NewSize(700, 340))
+	// Pin to top-right via a border layout with a fixed-size glow in the top slot,
+	// right-aligned. GridWrap fixes the glow's size; HBox spacer pushes it right.
+	pinned := container.NewVBox(
+		container.NewHBox(layout.NewSpacer(), container.NewGridWrap(fyne.NewSize(700, 340), glow)),
+		layout.NewSpacer(),
+	)
+	return container.NewStack(base, pinned)
 }
 
 // mono returns a monospace canvas text of the given size/color.
@@ -243,6 +252,66 @@ func mono(text string, size float32, col color.NRGBA) *canvas.Text {
 }
 
 var _ = theme.SizeNameText // keep theme import if trimmed later
+
+// logKind selects a row color for the activity log.
+type logKind int
+
+const (
+	logInfo logKind = iota
+	logOK
+	logWarn
+	logMuted
+)
+
+func (k logKind) color() color.NRGBA {
+	switch k {
+	case logOK:
+		return accentColor
+	case logWarn:
+		return warnColor
+	case logMuted:
+		return monoFaint
+	default:
+		return textSecondary // info #b9c6c9 (fix #4: not the faint gray)
+	}
+}
+
+// logView is a scrollable, per-row-colored activity log (fix #4). Each row is a
+// dim mono timestamp + a colored mono message. Capped; auto-scrolls to bottom.
+type logView struct {
+	widget.BaseWidget
+	rows   *fyne.Container // VBox of row containers
+	scroll *container.Scroll
+	cap    int
+}
+
+func newLogView(capLines int) *logView {
+	l := &logView{rows: container.NewVBox(), cap: capLines}
+	l.scroll = container.NewVScroll(l.rows)
+	l.ExtendBaseWidget(l)
+	return l
+}
+
+// Append adds a "HH:MM:SS  message" row in the kind's color and scrolls to bottom.
+func (l *logView) Append(ts, msg string, kind logKind) {
+	t := mono(ts, 12, monoFaint) // timestamp #4a5a5e
+	m := mono(msg, 12, kind.color())
+	l.rows.Add(container.NewHBox(t, m))
+	if len(l.rows.Objects) > l.cap {
+		l.rows.Remove(l.rows.Objects[0])
+	}
+	l.rows.Refresh()
+	l.scroll.ScrollToBottom()
+}
+
+func (l *logView) Clear() {
+	l.rows.RemoveAll()
+	l.rows.Refresh()
+}
+
+func (l *logView) CreateRenderer() fyne.WidgetRenderer {
+	return widget.NewSimpleRenderer(l.scroll)
+}
 
 // ratioHBox lays two objects side by side with a fixed gap, splitting the
 // remaining width by wLeft:wRight (the brief's 1 : 1.08 column ratio).

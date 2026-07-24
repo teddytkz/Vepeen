@@ -3,6 +3,7 @@ package ui
 import (
 	"context"
 	"fmt"
+	"image/color"
 	"log"
 	"net"
 	"strings"
@@ -138,7 +139,7 @@ type controller struct {
 	routesEntry   *widget.Entry
 	userEntry     *widget.Entry
 	passEntry     *widget.Entry
-	logEntry      *widget.Entry
+	logView       *logView
 
 	btnSave     *widget.Button
 	btnDisc     *widget.Button
@@ -268,13 +269,9 @@ func (c *controller) build() fyne.CanvasObject {
 	c.btnClearLog.Importance = widget.LowImportance
 	logHeader := container.NewBorder(nil, nil, sectionLabel("ACTIVITY LOG"), c.btnClearLog)
 
-	c.logEntry = widget.NewMultiLineEntry()
-	c.logEntry.SetMinRowsVisible(5)
-	c.logEntry.Wrapping = fyne.TextWrapOff
-	c.logEntry.TextStyle = fyne.TextStyle{Monospace: true}
-	c.logEntry.Disable()
+	c.logView = newLogView(maxLogLines)
 
-	cardLog := card(container.NewBorder(logHeader, nil, nil, nil, c.logEntry))
+	cardLog := card(container.NewBorder(logHeader, nil, nil, nil, c.logView))
 
 	rightCol := container.NewBorder(cardHero, nil, nil, nil, cardLog)
 
@@ -304,7 +301,14 @@ func (c *controller) build() fyne.CanvasObject {
 		container.NewHBox(layout.NewSpacer(), c.btnSave, c.btnDisc, c.btnCancel, c.btnConn),
 	))
 
-	content := container.NewBorder(nil, footer, nil, nil, container.NewPadded(body))
+	// Title strip (fix #5): app name left, protocol label right, in mono.
+	appName := canvas.NewText("Vepeen", textPrimary)
+	appName.TextStyle = fyne.TextStyle{Bold: true}
+	appName.TextSize = 15
+	proto := mono("L2TP/IPsec · split tunnel", 12, color.NRGBA{R: 0x56, G: 0x66, B: 0x6b, A: 0xff})
+	titleStrip := container.NewPadded(container.NewBorder(nil, nil, appName, proto))
+
+	content := container.NewBorder(titleStrip, footer, nil, nil, container.NewPadded(body))
 	return container.NewStack(bgLayer(), content)
 }
 
@@ -345,33 +349,37 @@ func (c *controller) onHeroTap() {
 	}
 }
 
-// appendLog adds a timestamped line to the activity log (UI thread only).
-// Never pass PSK, password, or secret-bearing command lines.
+// appendLog adds a timestamped, color-coded line to the activity log (UI thread
+// only). Never pass PSK, password, or secret-bearing command lines.
 func (c *controller) appendLog(msg string) {
-	if c.logEntry == nil {
+	if c.logView == nil {
 		return
 	}
 	msg = strings.TrimSpace(msg)
 	if msg == "" {
 		return
 	}
-	line := time.Now().Format("15:04:05") + "  " + msg
-	cur := c.logEntry.Text
-	var next string
-	if cur == "" {
-		next = line
-	} else {
-		next = cur + "\n" + line
+	c.logView.Append(time.Now().Format("15:04:05"), msg, classifyLog(msg))
+}
+
+// classifyLog picks a log row color from the message content.
+func classifyLog(msg string) logKind {
+	l := strings.ToLower(msg)
+	switch {
+	case strings.Contains(l, "connected") || strings.Contains(l, "applied") ||
+		strings.Contains(l, "saved") || strings.Contains(l, "active"):
+		return logOK
+	case strings.Contains(l, "fail") || strings.Contains(l, "error") ||
+		strings.Contains(l, "skipped") || strings.Contains(l, "not ") ||
+		strings.Contains(l, "cannot") || strings.Contains(l, "invalid") ||
+		strings.Contains(l, "warn"):
+		return logWarn
+	case strings.Contains(l, "cancel") || strings.Contains(l, "cleared") ||
+		strings.Contains(l, "ready") || strings.Contains(l, "diagnostics"):
+		return logMuted
+	default:
+		return logInfo
 	}
-	lines := strings.Split(next, "\n")
-	if len(lines) > maxLogLines {
-		lines = lines[len(lines)-maxLogLines:]
-		next = strings.Join(lines, "\n")
-	}
-	c.logEntry.SetText(next)
-	// Scroll toward end for long history.
-	c.logEntry.CursorRow = len(lines) - 1
-	c.logEntry.Refresh()
 }
 
 func (c *controller) appendLogf(format string, args ...any) {
@@ -379,10 +387,10 @@ func (c *controller) appendLogf(format string, args ...any) {
 }
 
 func (c *controller) onClearLog() {
-	if c.logEntry == nil {
+	if c.logView == nil {
 		return
 	}
-	c.logEntry.SetText("")
+	c.logView.Clear()
 	c.appendLog("Log cleared.")
 }
 
@@ -465,7 +473,7 @@ func (c *controller) onProfileChanged(selected string) {
 	c.connectionName = strings.TrimSpace(selected)
 	c.loadCredentials()
 	c.syncIdentity()
-	if c.logEntry != nil && c.connectionName != "" {
+	if c.logView != nil && c.connectionName != "" {
 		c.appendLog("Profile selected · " + c.connectionName)
 	}
 }
@@ -793,10 +801,7 @@ func (c *controller) applyEnablement() {
 	setEntry(c.userEntry, formEnabled)
 	setEntry(c.passEntry, formEnabled)
 
-	// Log is always non-editable; Clear is always available (UI-only buffer).
-	if c.logEntry != nil {
-		c.logEntry.Disable()
-	}
+	// logView is inherently read-only; Clear is always available (UI-only buffer).
 	if c.btnClearLog != nil {
 		c.btnClearLog.Enable()
 	}

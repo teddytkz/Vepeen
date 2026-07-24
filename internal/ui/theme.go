@@ -63,7 +63,9 @@ func (t *vepeenTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant)
 	case theme.ColorNameInputBackground:
 		return inputFill
 	case theme.ColorNameInputBorder:
-		return inputBorder
+		// Kill Fyne's heavy pill outline on every entry/select. Inputs read via
+		// their dark fill; cards draw their own 1px stroke in card().
+		return color.Transparent
 	case theme.ColorNameButton:
 		return color.NRGBA{R: 0xff, G: 0xff, B: 0xff, A: 0x0d} // rgba(255,255,255,.05)
 	case theme.ColorNameHover:
@@ -89,6 +91,8 @@ func (t *vepeenTheme) Font(style fyne.TextStyle) fyne.Resource {
 
 func (t *vepeenTheme) Size(name fyne.ThemeSizeName) float32 {
 	switch name {
+	case theme.SizeNameInputBorder:
+		return 0 // no pill stroke (see ColorNameInputBorder)
 	case theme.SizeNameInputRadius, theme.SizeNameSelectionRadius:
 		return 11
 	}
