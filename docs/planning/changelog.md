@@ -1,5 +1,11 @@
 ## [Unreleased]
 
+### Changed
+
+- [2026-07-24] **docs-002** Minor docs: add compact **Platform support** section to root `README.md` (matrix + macOS partial gaps + Linux stub gaps + Linux needs). Windows remains primary; do not claim macOS/Linux full support. Insert after Project layout, before Security notes. Plan: `docs/planning/docs-002-platform-support-notes.md`. Agent: Documentation → Debugger/Reviewer. Files: `README.md` only.
+
+- [2026-07-24] **docs-001** Major docs: rewrite root `README.md` to match current product (existing OS VPN profiles, English UI, Route All Traffic, domain routes, `bin/vepeen.exe`, `vpn/win`+`vpn/shared`). Plan: `docs/planning/docs-001-readme-rewrite.md`. Agent: Documentation → Debugger/Reviewer. Files: `README.md` only.
+
 ### Fixed
 
 - [2026-07-24] **fix-023** Medium: traffic rate tiles wrong / hang / spike. Root causes in `startTraffic` (`internal/ui/main_window.go`): (1) first sample uses lifetime octets as 1s rate; (2) no elapsed-time normalization so multi-second deltas look like 1s; (3) `tickBusy` held across slow `ActiveConnections` → skipped ticks + hang; (4) dead `uint64` underflow check. Keep `formatRate` `*8` bits math. Fix sampling only + small `format_rate_test.go`. See `docs/planning/fix-023-traffic-rate-sampling.md`. Agent: Frontend Developer → Debugger/Reviewer.
