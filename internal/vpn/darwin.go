@@ -52,17 +52,20 @@ func EnsureNATRegistry() (shared.NATResult, error) { return shared.NATOK, nil }
 // EnsureSplitTunneling is a no-op; split tunnel is applied as routes post-connect.
 func EnsureSplitTunneling(name string) error { return nil }
 
-// Connect starts the named VPN service. Credentials are optional; when empty the
-// service's saved credentials are used.
+// Connect starts the named VPN service via networksetup, the same connect path
+// the macOS menu bar uses. This matters for L2TP/IPSec: `scutil --nc start` does
+// NOT load the IPSec Shared Secret (PSK) from the profile, so it fails with
+// "Shared Secret is missing"; networksetup -connectpppoeservice loads it.
+//
+// networksetup has no credential arguments — it always uses the credentials
+// saved on the macOS service. UI-entered username/password are therefore ignored
+// on macOS; configure them once in System Settings › Network. We still keep
+// scutil for status/list, which work correctly.
+//
+// ponytail: PSK loaded via networksetup (menu-bar path); scutil start silently
+// drops it. Revisit if a future macOS restores PSK loading to scutil.
 func Connect(p shared.ConnectParams) error {
-	args := []string{"--nc", "start", p.Name}
-	if strings.TrimSpace(p.Username) != "" {
-		args = append(args, "--user", p.Username)
-	}
-	if strings.TrimSpace(p.Password) != "" {
-		args = append(args, "--password", p.Password)
-	}
-	if out, err := exec.Command("scutil", args...).CombinedOutput(); err != nil {
+	if out, err := exec.Command("networksetup", "-connectpppoeservice", p.Name).CombinedOutput(); err != nil {
 		return shared.MapExecError("connect", err, string(out))
 	}
 	// scutil start is async; wait briefly for the service to reach Connected.
@@ -80,9 +83,9 @@ func Connect(p shared.ConnectParams) error {
 	return shared.NewUserError("dial", "Connection timed out", "The VPN did not connect within 30 seconds.")
 }
 
-// Disconnect stops the named VPN service.
+// Disconnect stops the named VPN service (matches Connect's networksetup path).
 func Disconnect(name string) error {
-	if out, err := exec.Command("scutil", "--nc", "stop", name).CombinedOutput(); err != nil {
+	if out, err := exec.Command("networksetup", "-disconnectpppoeservice", name).CombinedOutput(); err != nil {
 		return shared.MapExecError("disconnect", err, string(out))
 	}
 	return nil
