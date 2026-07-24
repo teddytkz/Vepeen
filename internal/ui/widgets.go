@@ -407,7 +407,10 @@ type logView struct {
 
 func newLogView(capLines int) *logView {
 	l := &logView{rows: container.NewVBox(), cap: capLines}
-	l.scroll = container.NewVScroll(l.rows)
+	// Scroll in BOTH directions: a long single line scrolls horizontally inside
+	// the box instead of forcing the whole window wider (the connected-state
+	// blowout bug — a raw diagnostics line was unbreakable and unbounded).
+	l.scroll = container.NewScroll(l.rows)
 	l.ExtendBaseWidget(l)
 	return l
 }
@@ -430,8 +433,18 @@ func (l *logView) Clear() {
 }
 
 func (l *logView) CreateRenderer() fyne.WidgetRenderer {
-	return widget.NewSimpleRenderer(l.scroll)
+	return &logViewRenderer{l: l}
 }
+
+// logViewRenderer clamps the log's MinSize to a modest fixed box so its scrolling
+// content (which can contain very long lines) never dictates the window width.
+type logViewRenderer struct{ l *logView }
+
+func (r *logViewRenderer) Layout(size fyne.Size)        { r.l.scroll.Resize(size) }
+func (r *logViewRenderer) MinSize() fyne.Size           { return fyne.NewSize(240, 120) }
+func (r *logViewRenderer) Refresh()                     { r.l.scroll.Refresh() }
+func (r *logViewRenderer) Objects() []fyne.CanvasObject { return []fyne.CanvasObject{r.l.scroll} }
+func (r *logViewRenderer) Destroy()                     {}
 
 // ratioHBox lays two objects side by side with a fixed gap, splitting the
 // remaining width by wLeft:wRight (the brief's 1 : 1.08 column ratio).

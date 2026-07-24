@@ -359,6 +359,11 @@ func (c *controller) appendLog(msg string) {
 	if msg == "" {
 		return
 	}
+	// Defensive cap: a runaway line must never widen the window (log scrolls, but
+	// keep rows sane). 300 chars is plenty for any real status message.
+	if len(msg) > 300 {
+		msg = msg[:300] + "…"
+	}
 	c.logView.Append(time.Now().Format("15:04:05"), msg, classifyLog(msg))
 }
 
@@ -1029,8 +1034,10 @@ func (c *controller) onConnect() {
 			} else {
 				c.setStatus(vpn.StatusConnected, "Connected", "Only the listed IPs/CIDRs route through the VPN.")
 				c.appendLog("Connected. Split tunnel active.")
+				// Diagnostics (raw scutil dump) go to the OS log only — it's one huge
+				// unbreakable line, useless and layout-breaking in the UI.
 				if diag, derr := vpn.ProfileDiagnostics(name); derr == nil && diag != "" {
-					c.appendLog("Diagnostics: " + diag)
+					log.Printf("connect diagnostics: %s", diag)
 				}
 				for _, w := range warnings {
 					c.appendLog(w)
