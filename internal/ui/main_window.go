@@ -58,6 +58,18 @@ func NewMainWindow(a fyne.App) (fyne.Window, func()) {
 		a.Quit()
 	}
 
+	w.SetMainMenu(fyne.NewMainMenu(
+		fyne.NewMenu("Menu",
+			fyne.NewMenuItem("Create Desktop Shortcut", func() {
+				if err := CreateDesktopShortcut(); err != nil {
+					ctrl.appendLog("Failed to create desktop shortcut: " + err.Error())
+				} else {
+					ctrl.appendLog("Desktop shortcut created.")
+				}
+			}),
+		),
+	))
+
 	return w, disconnectAndQuit
 }
 

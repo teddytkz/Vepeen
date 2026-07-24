@@ -2,7 +2,7 @@
 
 Windows desktop **L2TP/IPsec VPN client** (Go + Fyne v2) with **username/password** authentication and **selective IP/CIDR routing** (split tunnel only). The app orchestrates the built-in Windows VPN stack (`VpnClient` PowerShell + `rasdial`) instead of shipping a custom IPsec driver.
 
-**Last updated:** 2026-07-23
+**Last updated:** 2026-07-24
 
 > **Current status (2026-07-23):** PSK (pre-shared key) support is **reserved but not yet wired into the UI**. The encrypted store (`vepeen.bin`) reserves a `psk` field for future use, but the current build collects and stores only username/password. See [Dual authentication](#dual-authentication-important).
 
@@ -128,6 +128,8 @@ Indonesian labels; technical terms (L2TP, PSK, CIDR) stay in English. Primary pa
 | **Bersihkan log** | Clears the log buffer (always available) |
 
 Connection name is **hidden** (default Windows profile `Vepeen`, or the name already stored in `vepeen.bin`).
+
+The top **Apps** menu (Fyne main menu bar) contains **Create Desktop Shortcut**, which writes a `Vepeen.lnk` on the current user's Desktop pointing at the running executable (skips silently if it already exists; result is reported in the Log).
 
 ### Typical flow
 

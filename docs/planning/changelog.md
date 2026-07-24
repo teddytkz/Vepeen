@@ -1,6 +1,21 @@
 ## [Unreleased]
 
+### Fixed
+
+- [2026-07-24] **fix-015** Medium: COM apartment refcount imbalance in `CreateDesktopShortcut()` (`internal/ui/desktop_shortcut_windows.go`). `CoUninitialize` was deferred unconditionally, including on the `S_FALSE` (already-initialized) success path, which could tear down COM for the owning thread (e.g. Fyne's UI thread) and cause `RPC_E_DISCONNECTED` / `CO_E_NOTINITIALIZED`. Now `CoUninitialize` is deferred only when `CoInitializeEx` returns `S_OK` (0); on `S_FALSE` (1) it proceeds without uninitializing; any other HRESULT returns an error. `go build ./...` and `go vet ./internal/ui/...` must still pass.
+
 ### Changed
+
+- [2026-07-24] **menu-bar-apps** Minor: add a Fyne main menu bar with an "Apps" menu containing a "Create Desktop Shortcut" item that writes a Windows `.lnk` on the user's Desktop pointing at the running executable (`os.Executable()`), with the app icon and name "Vepeen".
+  - **Menu location (recommended):** build and set the `fyne.MainMenu` inside `NewMainWindow` in `internal/ui/main_window.go` (after `ctrl` is constructed, before `return`). Rationale: the menu item must surface success/failure feedback via the controller's existing `appendLog` mechanism, and `ctrl` is only in scope there; `main.go` only receives `(fyne.Window, func())` and has no handle to the controller. Setting it in `main.go` would require exporting a callback or the controller — unnecessary indirection.
+  - **Shortcut approach (recommended): (A) native IShellLinkW + IPersistFile via `golang.org/x/sys/windows`.** Rationale: zero new dependencies (consistent with DPAPI/single-instance/netapi which already use `NewLazySystemDLL`/`NewProc`/`Call`); no PowerShell spawn (aligns with fix-012's anti-powershell direction); Windows-only code is already isolated behind `//go:build windows` + `!windows` stubs in this package. (B) `go-ole` adds a dependency the project has avoided; (C) PowerShell is explicitly discouraged by project direction.
+  - **Files:**
+    - `internal/ui/desktop_shortcut_windows.go` (NEW, `//go:build windows`): `CreateDesktopShortcut() error` — resolve `os.Executable()`, resolve Desktop via `SHGetFolderPath(CSIDL_DESKTOP)` / `FOLDERID_Desktop`, build `IShellLinkW` + `IPersistFile` COM objects via `ole32.dll`/`shell32.dll` lazy procs, set target path + icon location (`os.Executable()`) + description "Vepeen", `Save` to `<Desktop>\Vepeen.lnk`, release COM. Returns a clear error on any failure (already-exists is non-fatal → return nil or a sentinel).
+    - `internal/ui/desktop_shortcut_other.go` (NEW, `//go:build !windows`): `CreateDesktopShortcut() error` returns `nil` (no-op) so non-Windows builds compile.
+    - `internal/ui/main_window.go`: inside `NewMainWindow`, after `ctrl` is built, construct `fyne.NewMainMenu(fyne.NewMenu("Apps", fyne.NewMenuItem("Create Desktop Shortcut", func(){ if err := CreateDesktopShortcut(); err != nil { ctrl.appendLog("Failed to create desktop shortcut: " + err.Error()) } else { ctrl.appendLog("Desktop shortcut created.") } }))` and call `w.SetMainMenu(menu)`.
+  - **Feedback:** route result through `ctrl.appendLog(...)` (existing activity log, UI-thread safe, English strings only per i18n-en). No dialog needed; consistent with how Save/Connect surface status.
+  - **Constraints honored:** no console window (`-H windowsgui` already set in `build.ps1`); single-instance mutex and tray "Show"/"Quit" behavior untouched; teal theme unaffected (menu uses Fyne default theming); English-only strings.
+  - **Agent:** Frontend Developer → Debugger/Reviewer
 
 - [2026-07-23] **fix-014** Low: embed Penelope icon into `vepeen.exe` so Windows Explorer / taskbar / title bar show it (`docs/planning/fix-014-exe-icon.md`)
   - **Root cause:** `cmd/vepeen/rsrc.syso` (1 132 bytes) contains only an `RT_MANIFEST` — the `-ico` flag was never passed to `rsrc`, so no `RT_ICON`/`RT_GROUP_ICON` resource was compiled in. `vepeen.exe.manifest` was also never committed.
