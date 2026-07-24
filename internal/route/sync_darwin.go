@@ -17,14 +17,23 @@ import (
 // flow quiet (no misleading "route sync skipped" warning).
 func SyncRoutes(connectionName string, desired []string) error { return nil }
 
-// ApplySplitTunnel enforces split tunnel on the just-connected macOS VPN:
-//  1. delete the VPN's default route(s) so general traffic stays off the tunnel
-//     (macOS L2TP sets OverridePrimary=1, i.e. full tunnel, by default), and
-//  2. add each desired prefix pointed at the tunnel interface.
+// ApplySplitTunnel adds the desired split-tunnel prefixes to the just-connected
+// macOS VPN tunnel interface. It only ADDS routes — it never touches the default
+// route.
 //
-// All route edits need root, so they run in ONE osascript admin prompt (a single
-// macOS password dialog per connect, not one per route). Returns a human-readable
-// summary for the activity log, or an error describing what could not be applied.
+// Tunnel scope (full vs split) is owned by macOS, via the service's "Send all
+// traffic over VPN connection" option (OverridePrimary):
+//   - OFF  → macOS keeps the LAN as primary; only these added prefixes use the
+//     tunnel. True split tunnel; general internet + DNS keep working.
+//   - ON   → macOS routes everything through the VPN (full tunnel). Internet
+//     still works; the added prefixes are redundant.
+//
+// Earlier this function deleted the VPN default route to force split tunnel, but
+// that killed general internet (the LAN default route and DNS were not restored).
+// Deferring the scope decision to macOS is the correct, robust design.
+//
+// Route edits need root, so they run in ONE osascript admin prompt. Returns a
+// human-readable summary for the activity log.
 //
 // ponytail: add-only, no reconciliation. macOS drops tunnel routes on disconnect,
 // so stale routes aren't a concern in the dial-existing-service model.
@@ -37,17 +46,15 @@ func ApplySplitTunnel(desired []string) (summary string, err error) {
 		return "", fmt.Errorf("tunnel interface not ready for split-tunnel routes: %w", err)
 	}
 
-	// Build one shell script: drop the VPN default route, then add each prefix.
-	// `|| true` on the delete so a missing default route isn't fatal.
 	var b strings.Builder
-	b.WriteString("/sbin/route -n delete default -interface " + iface + " >/dev/null 2>&1 || true; ")
 	for _, prefix := range desired {
-		b.WriteString(fmt.Sprintf("/sbin/route -n add -net %s -interface %s; ", toNet(prefix), iface))
+		// `|| true` so an already-present route isn't fatal.
+		b.WriteString(fmt.Sprintf("/sbin/route -n add -net %s -interface %s || true; ", toNet(prefix), iface))
 	}
 	if err := runAsAdmin(b.String()); err != nil {
 		return "", fmt.Errorf("split-tunnel route setup failed (admin denied or error): %w", err)
 	}
-	return fmt.Sprintf("Split tunnel applied: %d route(s) via %s; VPN default route removed.", len(desired), iface), nil
+	return fmt.Sprintf("Split tunnel: %d route(s) added via %s. Tunnel scope (split vs full) is set by macOS in Network › VPN › Details › 'Send all traffic over VPN connection'.", len(desired), iface), nil
 }
 
 // runAsAdmin executes a shell command with administrator privileges via osascript,
