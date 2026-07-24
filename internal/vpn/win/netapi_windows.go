@@ -110,6 +110,58 @@ func resolveVPNInterface(vpnName string) (ifIndex uint32, localIPs []net.IP, err
 	return 0, nil, nil
 }
 
+// InterfaceInfo finds the network adapter whose FriendlyName matches name and
+// returns its interface index plus all IPv4 unicast addresses with their on-link
+// prefix length expressed as a net.IPNet (IP + subnet mask). When name is empty
+// or the adapter is not present (not connected), it returns (0, nil, nil) — this
+// is not treated as an error by callers, mirroring resolveVPNInterface and
+// TrafficCounters graceful degradation.
+func InterfaceInfo(name string) (ifIndex uint32, addrs []net.IPNet, err error) {
+	if name == "" {
+		return 0, nil, nil
+	}
+
+	var bufSize uint32 = 16 * 1024
+	buf := make([]byte, bufSize)
+	for {
+		err := windows.GetAdaptersAddresses(
+			windows.AF_UNSPEC, 0, 0,
+			(*windows.IpAdapterAddresses)(unsafe.Pointer(&buf[0])),
+			&bufSize,
+		)
+		if err == windows.ERROR_BUFFER_OVERFLOW {
+			buf = make([]byte, bufSize)
+			continue
+		}
+		if err != nil {
+			return 0, nil, fmt.Errorf("GetAdaptersAddresses: %w", err)
+		}
+		break
+	}
+
+	for addr := (*windows.IpAdapterAddresses)(unsafe.Pointer(&buf[0])); addr != nil; addr = addr.Next {
+		if addr.FriendlyName == nil {
+			continue
+		}
+		if windows.UTF16PtrToString(addr.FriendlyName) != name {
+			continue
+		}
+		ifIndex = addr.IfIndex
+		for ua := addr.FirstUnicastAddress; ua != nil; ua = ua.Next {
+			ip := ua.Address.IP()
+			if ip4 := ip.To4(); ip4 != nil {
+				addrs = append(addrs, net.IPNet{
+					IP:   ip4,
+					Mask: net.CIDRMask(int(ua.OnLinkPrefixLength), 32),
+				})
+			}
+		}
+		// FriendlyName is unique enough; stop at first match.
+		return ifIndex, addrs, nil
+	}
+	return 0, nil, nil
+}
+
 // getIfEntry2 fills a MIB_IF_ROW2 for the given interface index and returns the
 // cumulative received and transmitted octets. It uses the raw GetIfEntry2 proc
 // (GetIfEntry2Ex is wrapped by x/sys but GetIfEntry2 is not).

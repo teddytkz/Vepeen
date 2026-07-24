@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+### Added
+
+- [2026-07-24] **prd-005** Minor: show local IP + subnet next to "Connected" status, e.g. `Connected - 192.168.1.1/255.255.255.0`. New `vpn.InterfaceInfo(name)` (win impl in `internal/vpn/win/netapi_windows.go`, re-export `internal/vpn/win_exports_windows.go`, stub `internal/vpn/stub_other.go`); UI `refreshLocalIP()` goroutine with retry in `internal/ui/main_window.go` called from the 3 Connected `setStatus` paths. Agent: Backend → Frontend → Debugger/Reviewer.
+
 ### Fixed
 
 - [2026-07-24] **fix-015** Medium: COM apartment refcount imbalance in `CreateDesktopShortcut()` (`internal/ui/desktop_shortcut_windows.go`). `CoUninitialize` was deferred unconditionally, including on the `S_FALSE` (already-initialized) success path, which could tear down COM for the owning thread (e.g. Fyne's UI thread) and cause `RPC_E_DISCONNECTED` / `CO_E_NOTINITIALIZED`. Now `CoUninitialize` is deferred only when `CoInitializeEx` returns `S_OK` (0); on `S_FALSE` (1) it proceeds without uninitializing; any other HRESULT returns an error. `go build ./...` and `go vet ./internal/ui/...` must still pass.

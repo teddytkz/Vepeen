@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"image/color"
+	"net"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -343,6 +344,7 @@ func (c *controller) loadInitial() {
 			if st == vpn.StatusConnected {
 				c.state = vpn.StatusConnected
 				c.setStatus(vpn.StatusConnected, "Connected", "Only the listed IPs/CIDRs route through the VPN.")
+				c.refreshLocalIP()
 				c.appendLog("Already connected (OS status).")
 				c.applyEnablement()
 			}
@@ -554,6 +556,41 @@ func (c *controller) stopPingTicker() {
 	fyne.Do(func() {
 		c.pingLabel.SetText("not connected")
 	})
+}
+
+// refreshLocalIP asynchronously resolves the VPN adapter's local IPv4 address
+// and subnet mask and appends it to the Connected status label, e.g.
+// "Connected - 192.168.1.1/255.255.255.0". The adapter IP may not be assigned
+// the instant ConnectFull returns, so it retries briefly.
+func (c *controller) refreshLocalIP() {
+	name := c.profileName()
+	go func() {
+		var info string
+		for attempt := 0; attempt < 10; attempt++ {
+			ifIndex, addrs, err := vpn.InterfaceInfo(name)
+			if err == nil && ifIndex != 0 && len(addrs) > 0 {
+				ip := addrs[0].IP
+				mask := addrs[0].Mask
+				if ip != nil && mask != nil {
+					info = ip.String() + "/" + net.IP(mask).String()
+					break
+				}
+			}
+			time.Sleep(300 * time.Millisecond)
+		}
+		if info == "" {
+			return
+		}
+		fyne.Do(func() {
+			if c.state != vpn.StatusConnected {
+				return
+			}
+			if strings.Contains(c.statusPri.Text, info) {
+				return
+			}
+			c.statusPri.SetText(c.statusPri.Text + " - " + info)
+		})
+	}()
 }
 
 // setStatus updates short status labels only (does not append log).
@@ -794,6 +831,7 @@ func (c *controller) onConnect() {
 				} else if ue, ok := vpn.AsUserError(err); ok && ue.Code == "already" {
 					// Already connected is a success-like state: enable Disconnect.
 					c.setStatus(vpn.StatusConnected, ue.Primary, ue.Detail)
+					c.refreshLocalIP()
 					c.appendLog("Already connected.")
 					c.hostArea.SetText("Waiting for host list…")
 					c.startTraffic(name)
@@ -820,6 +858,7 @@ func (c *controller) onConnect() {
 				c.hostArea.SetText("Waiting for host list…")
 				c.startTraffic(name)
 				c.startPingTicker()
+				c.refreshLocalIP()
 			}
 			c.applyEnablement()
 		})

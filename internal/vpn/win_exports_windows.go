@@ -3,6 +3,8 @@
 package vpn
 
 import (
+	"net"
+
 	"vepeen/internal/vpn/shared"
 	"vepeen/internal/vpn/win"
 )
@@ -79,4 +81,10 @@ func TrafficCounters(name string) (uint64, uint64, error) {
 // PurgeOrphanScripts deletes leftover vpn-*.ps1 scripts under %TEMP%\vepeen.
 func PurgeOrphanScripts() {
 	win.PurgeOrphanScripts()
+}
+
+// InterfaceInfo returns the local IPv4 address(es) and subnet mask of the
+// connected VPN adapter. When not connected it returns (0, nil, nil).
+func InterfaceInfo(name string) (uint32, []net.IPNet, error) {
+	return win.InterfaceInfo(name)
 }

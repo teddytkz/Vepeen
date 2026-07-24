@@ -2,7 +2,11 @@
 
 package vpn
 
-import "vepeen/internal/vpn/shared"
+import (
+	"net"
+
+	"vepeen/internal/vpn/shared"
+)
 
 func unsupported() error {
 	return shared.NewUserError("platform", "Failed", "VPN features are only supported on Windows.")
@@ -55,3 +59,6 @@ func ActiveConnections(name string) ([]ActiveConn, error) { return nil, unsuppor
 
 // PingHost is not supported outside Windows.
 func PingHost(host string, timeoutMs uint32) (uint32, error) { return 0, unsupported() }
+
+// InterfaceInfo is not supported outside Windows.
+func InterfaceInfo(name string) (uint32, []net.IPNet, error) { return 0, nil, unsupported() }

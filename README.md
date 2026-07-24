@@ -147,7 +147,7 @@ The top **Apps** menu (Fyne main menu bar) contains **Create Desktop Shortcut**,
 | --------- | -- |
 | Idle / after load | **Terputus**; log notes load result |
 | Connect in progress | **Menghubungkan…** (form locked); log appends each phase |
-| Connected | **Terhubung**; **Putuskan** enabled; log success line |
+| Connected | **Terhubung**; **Putuskan** enabled; log success line; once the VPN adapter's local IP is assigned, the status appends it with the subnet mask, e.g. `Connected - 192.168.1.1/255.255.255.0` |
 | OS already connected (e.g. rasdial “already connected”) | Treated as **Terhubung** (not an error); **Putuskan** enabled |
 | Disconnect in progress | **Memutuskan…** |
 | Validation / OS failure | Error status + sanitized log line |
