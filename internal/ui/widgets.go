@@ -13,14 +13,20 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
-// card wraps content in a rounded, subtly-filled, bordered panel per the brief's
-// card tokens (fill rgba(255,255,255,.03), border .06, 16px radius).
+// card wraps content in a rounded, subtly-filled, bordered panel with 18px inner
+// padding (design card tokens: fill rgba(255,255,255,.025), border .06, r16).
 func card(content fyne.CanvasObject) fyne.CanvasObject {
-	bg := canvas.NewRectangle(cardFill)
-	bg.CornerRadius = 16
+	return cardPad(content, 18, cardFill, 16)
+}
+
+// cardPad is card() with explicit inner padding, fill, and corner radius.
+func cardPad(content fyne.CanvasObject, pad float32, fill color.NRGBA, radius float32) fyne.CanvasObject {
+	bg := canvas.NewRectangle(fill)
+	bg.CornerRadius = radius
 	bg.StrokeColor = cardBorder
 	bg.StrokeWidth = 1
-	return container.NewStack(bg, container.NewPadded(content))
+	padded := container.New(layout.NewCustomPaddedLayout(pad, pad, pad, pad), content)
+	return container.NewStack(bg, padded)
 }
 
 // sectionLabel renders an uppercase teal section heading (11px/700, tracked).
@@ -252,6 +258,120 @@ func mono(text string, size float32, col color.NRGBA) *canvas.Text {
 }
 
 var _ = theme.SizeNameText // keep theme import if trimmed later
+
+// tealCheck is the design's custom checkbox: a 20px rounded square, teal fill +
+// dark check when on, faint border when off, with a label. Tappable.
+type tealCheck struct {
+	widget.BaseWidget
+	Checked   bool
+	OnChanged func(bool)
+	label     string
+}
+
+func newTealCheck(label string, changed func(bool)) *tealCheck {
+	c := &tealCheck{label: label, OnChanged: changed}
+	c.ExtendBaseWidget(c)
+	return c
+}
+
+func (c *tealCheck) SetChecked(v bool) {
+	c.Checked = v
+	c.Refresh()
+}
+
+func (c *tealCheck) Tapped(_ *fyne.PointEvent) {
+	c.Checked = !c.Checked
+	c.Refresh()
+	if c.OnChanged != nil {
+		c.OnChanged(c.Checked)
+	}
+}
+
+func (c *tealCheck) CreateRenderer() fyne.WidgetRenderer {
+	box := canvas.NewRectangle(color.Transparent)
+	box.CornerRadius = 6
+	box.StrokeWidth = 1.5
+	mark := canvas.NewText("✓", darkOnAccent)
+	mark.TextStyle = fyne.TextStyle{Bold: true}
+	mark.TextSize = 12
+	mark.Alignment = fyne.TextAlignCenter
+	lbl := canvas.NewText(c.label, textSecondary)
+	lbl.TextSize = 13.5
+	r := &tealCheckRenderer{c: c, box: box, mark: mark, lbl: lbl}
+	r.Refresh()
+	return r
+}
+
+type tealCheckRenderer struct {
+	c    *tealCheck
+	box  *canvas.Rectangle
+	mark *canvas.Text
+	lbl  *canvas.Text
+}
+
+func (r *tealCheckRenderer) Refresh() {
+	if r.c.Checked {
+		r.box.FillColor = accentColor
+		r.box.StrokeColor = accentColor
+		r.mark.Text = "✓"
+	} else {
+		r.box.FillColor = color.Transparent
+		r.box.StrokeColor = color.NRGBA{R: 0xff, G: 0xff, B: 0xff, A: 0x38} // rgba(255,255,255,.22)
+		r.mark.Text = ""
+	}
+	canvas.Refresh(r.box)
+	canvas.Refresh(r.mark)
+	canvas.Refresh(r.lbl)
+}
+
+func (r *tealCheckRenderer) Layout(size fyne.Size) {
+	const bs = 20
+	r.box.Resize(fyne.NewSize(bs, bs))
+	r.box.Move(fyne.NewPos(0, (size.Height-bs)/2))
+	r.mark.Resize(fyne.NewSize(bs, bs))
+	r.mark.Move(fyne.NewPos(0, (size.Height-bs)/2))
+	r.lbl.Move(fyne.NewPos(bs+10, (size.Height-r.lbl.MinSize().Height)/2))
+	r.lbl.Resize(fyne.NewSize(size.Width-bs-10, r.lbl.MinSize().Height))
+}
+
+func (r *tealCheckRenderer) MinSize() fyne.Size {
+	lw := r.lbl.MinSize().Width
+	return fyne.NewSize(20+10+lw, 24)
+}
+
+func (r *tealCheckRenderer) Objects() []fyne.CanvasObject {
+	return []fyne.CanvasObject{r.box, r.mark, r.lbl}
+}
+
+func (r *tealCheckRenderer) Destroy() {}
+
+// passwordWithToggle returns a password entry overlaid with a trailing mono
+// "show"/"hide" button that flips masking. The entry is returned so the caller
+// can read/set its text.
+func passwordWithToggle() (*widget.Entry, fyne.CanvasObject) {
+	e := widget.NewPasswordEntry()
+	e.SetPlaceHolder("Password")
+	toggle := widget.NewButton("show", nil)
+	toggle.Importance = widget.LowImportance
+	toggle.OnTapped = func() {
+		e.Password = !e.Password
+		if e.Password {
+			toggle.SetText("show")
+		} else {
+			toggle.SetText("hide")
+		}
+		e.Refresh()
+	}
+	// Border layout: entry fills, toggle pinned right.
+	return e, container.NewBorder(nil, nil, nil, toggle, e)
+}
+
+// primaryButton styles a teal-filled CTA with dark text (design footer CTA).
+func primaryButton(label string, tapped func()) *widget.Button {
+	b := widget.NewButton(label, tapped)
+	b.Importance = widget.HighImportance
+	return b
+}
 
 // logKind selects a row color for the activity log.
 type logKind int

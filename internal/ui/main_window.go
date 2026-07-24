@@ -149,7 +149,7 @@ type controller struct {
 	statusPri   *widget.Label
 	statusDet   *widget.Label
 
-	rememberCheck *widget.Check
+	rememberCheck *tealCheck
 	hostArea      *widget.Entry
 	dlLabel       *widget.Label
 	tickBusy      atomic.Bool
@@ -197,15 +197,15 @@ func (c *controller) build() fyne.CanvasObject {
 
 	c.userEntry = widget.NewEntry()
 	c.userEntry.SetPlaceHolder("Username")
-	c.passEntry = widget.NewPasswordEntry()
-	c.passEntry.SetPlaceHolder("Password")
-	c.rememberCheck = widget.NewCheck("Remember credentials", nil)
+	var passField fyne.CanvasObject
+	c.passEntry, passField = passwordWithToggle()
+	c.rememberCheck = newTealCheck("Remember credentials", nil)
 	c.rememberCheck.SetChecked(true)
 
 	cardCreds := card(container.NewVBox(
 		sectionLabel("CREDENTIALS"),
 		c.userEntry,
-		c.passEntry,
+		passField,
 		c.rememberCheck,
 		helperText("Leave blank to use credentials saved in Keychain."),
 	))
@@ -258,12 +258,12 @@ func (c *controller) build() fyne.CanvasObject {
 	c.pingLabel = widget.NewLabel("")
 	c.hostArea = widget.NewMultiLineEntry()
 
-	cardHero := card(container.NewVBox(
+	cardHero := cardPad(container.NewVBox(
 		container.NewCenter(c.hero),
 		container.NewCenter(c.heroName),
 		container.NewCenter(c.heroSub),
 		stats,
-	))
+	), 26, color.NRGBA{R: 0xff, G: 0xff, B: 0xff, A: 0x0a}, 20) // brighter fill, r20
 
 	c.btnClearLog = widget.NewButton("Clear", c.onClearLog)
 	c.btnClearLog.Importance = widget.LowImportance
@@ -271,7 +271,7 @@ func (c *controller) build() fyne.CanvasObject {
 
 	c.logView = newLogView(maxLogLines)
 
-	cardLog := card(container.NewBorder(logHeader, nil, nil, nil, c.logView))
+	cardLog := cardPad(container.NewBorder(logHeader, nil, nil, nil, c.logView), 16, cardFill, 16)
 
 	rightCol := container.NewBorder(cardHero, nil, nil, nil, cardLog)
 
