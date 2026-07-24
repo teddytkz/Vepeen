@@ -32,12 +32,12 @@ const maxLogLines = 300
 // VPN (best-effort, 5 s timeout) then calls a.Quit().
 func NewMainWindow(a fyne.App) (fyne.Window, func()) {
 	w := a.NewWindow("Vepeen")
-	w.Resize(fyne.NewSize(960, 600))
+	w.Resize(fyne.NewSize(1040, 780)) // redesign brief's target size
 
 	ctrl := newController()
 	ctrl.win = w
 	// Window has no SetMinSize in Fyne v2.8; enforce via content MinSize wrapper.
-	w.SetContent(newMinSizeWrap(ctrl.build(), fyne.NewSize(900, 560)))
+	w.SetContent(newMinSizeWrap(ctrl.build(), fyne.NewSize(1000, 720)))
 	// Centering is now performed synchronously at show time by ui.ShowCentered
 	// (called from main.go after NewMainWindow returns), which positions the
 	// window at the work-area center before the first frame is composited. This
@@ -139,7 +139,7 @@ type controller struct {
 	routesEntry   *widget.Entry
 	userEntry     *widget.Entry
 	passEntry     *widget.Entry
-	logEntry      *widget.Entry
+	logView       *logView
 
 	btnSave     *widget.Button
 	btnDisc     *widget.Button
@@ -149,7 +149,7 @@ type controller struct {
 	statusPri   *widget.Label
 	statusDet   *widget.Label
 
-	rememberCheck *widget.Check
+	rememberCheck *tealCheck
 	hostArea      *widget.Entry
 	dlLabel       *widget.Label
 	tickBusy      atomic.Bool
@@ -161,6 +161,17 @@ type controller struct {
 
 	pingLabel *widget.Label // gateway ping status text
 	pingStop  chan struct{} // closed to stop the ping ticker
+
+	// Redesign widgets.
+	hero       *heroRing      // focal connect/disconnect ring
+	heroName   *canvas.Text   // profile name under the ring
+	heroSub    *canvas.Text   // "L2TP/IPsec · host" sub line
+	statDown   *canvas.Text   // Down tile value
+	statUp     *canvas.Text   // Up tile value
+	statPing   *canvas.Text   // Ping tile value
+	routeCount *canvas.Text   // "N routes" counter
+	footerDot  *canvas.Circle // footer state dot
+	footerText *canvas.Text   // footer status text
 }
 
 func newController() *controller {
@@ -173,156 +184,207 @@ func newController() *controller {
 	}
 }
 
-// smallTitle renders a compact bold teal section heading used inside cards.
-func smallTitle(text string) *canvas.Text {
-	t := canvas.NewText(text, color.NRGBA{R: 0x0f, G: 0xb5, B: 0xae, A: 0xff})
-	t.TextSize = theme.Size(theme.SizeNameText) * 0.85
-	t.TextStyle = fyne.TextStyle{Bold: true}
-	return t
-}
-
 func (c *controller) build() fyne.CanvasObject {
-	title := widget.NewLabel("Vepeen")
-	title.TextStyle = fyne.TextStyle{Bold: true}
-
-	subtitle := widget.NewLabel("L2TP/IPsec · split tunnel")
-	subtitle.Wrapping = fyne.TextWrapWord
-
-	header := container.NewPadded(container.NewVBox(title, subtitle, widget.NewSeparator()))
+	// ---- Left column ----
 
 	c.profileSelect = widget.NewSelect([]string{}, c.onProfileChanged)
-	c.profileSelect.PlaceHolder = "Select Windows VPN connection…"
+	c.profileSelect.PlaceHolder = "Select VPN profile…"
 
-	c.userEntry = widget.NewEntry()
-	c.userEntry.SetPlaceHolder("Username (optional)")
-	c.passEntry = widget.NewPasswordEntry()
-	c.passEntry.SetPlaceHolder("Password (optional)")
-	credNote := widget.NewLabel("Leave username/password blank to use credentials saved in Windows Credential Manager.")
-	credNote.Wrapping = fyne.TextWrapWord
-
-	c.rememberCheck = widget.NewCheck("Remember credentials", nil)
-	c.rememberCheck.SetChecked(true)
-
-	cardKoneksi := widget.NewCard("", "",
-		container.NewVBox(
-			smallTitle("VPN Connection"),
-			widget.NewLabel("Select an existing VPN profile from Windows."),
-			c.profileSelect,
-			c.userEntry,
-			c.passEntry,
-			credNote,
-			c.rememberCheck,
-		),
-	)
-
-	routesDuty := widget.NewLabel("Required · one IP, CIDR, or domain name per line. Only these destinations route through the VPN.")
-	routesDuty.Wrapping = fyne.TextWrapWord
-
-	c.routesEntry = widget.NewMultiLineEntry()
-	c.routesEntry.SetMinRowsVisible(3)
-	c.routesEntry.Wrapping = fyne.TextWrapOff
-
-	routesHelp := widget.NewLabel("Examples: 10.10.0.0/16, 203.0.113.50, or mail.foofle.com. Blank lines ignored. # = comment.")
-	routesHelp.Wrapping = fyne.TextWrapWord
-
-	cardRute := widget.NewCard("", "",
-		container.NewVBox(smallTitle("Split Tunnel Routes"), routesDuty, c.routesEntry, routesHelp),
-	)
-
-	c.statusPri = widget.NewLabel("Disconnected")
-	c.statusPri.TextStyle = fyne.TextStyle{Bold: true}
-	c.statusPri.Wrapping = fyne.TextWrapWord
-	c.statusDet = widget.NewLabel("Select a VPN connection, enter routes, then click Connect.")
-	c.statusDet.Wrapping = fyne.TextWrapWord
-
-	cardStatus := widget.NewCard("", "",
-		container.NewVBox(smallTitle("Status"), c.statusPri, c.statusDet),
-	)
-
-	c.btnClearLog = widget.NewButton("Clear log", c.onClearLog)
-	logHeader := container.NewBorder(nil, nil, smallTitle("Log"), c.btnClearLog)
-
-	c.logEntry = widget.NewMultiLineEntry()
-	c.logEntry.SetMinRowsVisible(5)
-	c.logEntry.Wrapping = fyne.TextWrapOff
-	c.logEntry.Disable() // read-only activity history
-
-	cardLog := widget.NewCard("", "",
-		container.NewVBox(logHeader, c.logEntry),
-	)
-
-	c.hostArea = widget.NewMultiLineEntry()
-	c.hostArea.SetMinRowsVisible(4)
-	c.hostArea.Wrapping = fyne.TextWrapOff
-	c.hostArea.Disable()
-	cardInfo := widget.NewCard("", "", container.NewVBox(smallTitle("Connection Info"), c.hostArea))
-
-	c.dlLabel = widget.NewLabel("Download: —")
-	c.ulLabel = widget.NewLabel("Upload: —")
-	c.dlLabel.Wrapping = fyne.TextWrapWord
-	c.ulLabel.Wrapping = fyne.TextWrapWord
-	cardTraffic := widget.NewCard("", "", container.NewVBox(smallTitle("Traffic"), c.dlLabel, c.ulLabel))
-
-	c.pingLabel = widget.NewLabel("not connected")
-	cardPing := widget.NewCard("", "", container.NewVBox(
-		smallTitle("Ping Status"),
-		c.pingLabel,
+	cardProfile := card(container.NewVBox(
+		sectionLabel("CONNECTION PROFILE"),
+		c.profileSelect,
 	))
 
-	leftCol := container.NewBorder(cardKoneksi, nil, nil, nil, cardRute)
-	rightCol := container.NewBorder(cardStatus, nil, nil, nil,
-		container.NewVBox(cardLog, cardInfo, cardTraffic, cardPing),
+	c.userEntry = widget.NewEntry()
+	c.userEntry.SetPlaceHolder("Username")
+	var passField fyne.CanvasObject
+	c.passEntry, passField = passwordWithToggle()
+	c.rememberCheck = newTealCheck("Remember credentials", nil)
+	c.rememberCheck.SetChecked(true)
+
+	cardCreds := card(container.NewVBox(
+		sectionLabel("CREDENTIALS"),
+		c.userEntry,
+		passField,
+		c.rememberCheck,
+		helperText("Leave blank to use credentials saved in Keychain."),
+	))
+
+	c.routesEntry = widget.NewMultiLineEntry()
+	c.routesEntry.SetMinRowsVisible(6)
+	c.routesEntry.Wrapping = fyne.TextWrapOff
+	c.routesEntry.TextStyle = fyne.TextStyle{Monospace: true}
+	c.routesEntry.SetPlaceHolder("10.10.0.0/16\n203.0.113.50\nmail.foofle.com")
+	c.routesEntry.OnChanged = func(string) { c.updateRouteCount() }
+
+	c.routeCount = mono("0 routes", 11, textFaint)
+	routesHeader := container.NewBorder(nil, nil, sectionLabel("SPLIT TUNNEL ROUTES"), c.routeCount)
+
+	cardRoutes := card(container.NewBorder(
+		container.NewVBox(routesHeader, helperText("Only these destinations route through the VPN.")),
+		nil, nil, nil,
+		c.routesEntry,
+	))
+
+	leftCol := container.NewBorder(
+		container.NewVBox(cardProfile, cardCreds),
+		nil, nil, nil,
+		cardRoutes,
 	)
 
-	body := container.NewPadded(
-		container.NewGridWithColumns(2, leftCol, rightCol),
+	// ---- Right column: hero + log ----
+
+	c.hero = newHeroRing(c.onHeroTap)
+
+	c.heroName = canvas.NewText("No profile selected", textPrimary)
+	c.heroName.TextSize = 16
+	c.heroName.TextStyle = fyne.TextStyle{Bold: true}
+	c.heroName.Alignment = fyne.TextAlignCenter
+	c.heroSub = mono("choose a profile to begin", 12, monoFaint)
+	c.heroSub.Alignment = fyne.TextAlignCenter
+
+	c.statDown = mono("—", 15, textSecondary)
+	c.statUp = mono("—", 15, textSecondary)
+	c.statPing = mono("not connected", 13, textSecondary)
+	stats := container.NewGridWithColumns(3,
+		statTile("DOWN", c.statDown),
+		statTile("UP", c.statUp),
+		statTile("PING", c.statPing),
 	)
 
-	c.btnSave = widget.NewButton("Save", c.onSave)
+	// keep legacy labels alive so existing tickers compile; not shown.
+	c.dlLabel = widget.NewLabel("")
+	c.ulLabel = widget.NewLabel("")
+	c.pingLabel = widget.NewLabel("")
+	c.hostArea = widget.NewMultiLineEntry()
+
+	cardHero := cardPad(container.NewVBox(
+		container.NewCenter(c.hero),
+		container.NewCenter(c.heroName),
+		container.NewCenter(c.heroSub),
+		stats,
+	), 26, color.NRGBA{R: 0xff, G: 0xff, B: 0xff, A: 0x0a}, 20) // brighter fill, r20
+
+	c.btnClearLog = widget.NewButton("Clear", c.onClearLog)
+	c.btnClearLog.Importance = widget.LowImportance
+	logHeader := container.NewBorder(nil, nil, sectionLabel("ACTIVITY LOG"), c.btnClearLog)
+
+	c.logView = newLogView(maxLogLines)
+
+	cardLog := cardPad(container.NewBorder(logHeader, nil, nil, nil, c.logView), 16, cardFill, 16)
+
+	rightCol := container.NewBorder(cardHero, nil, nil, nil, cardLog)
+
+	// legacy status labels retained (updated by state machine, surfaced in footer).
+	c.statusPri = widget.NewLabel("Disconnected")
+	c.statusDet = widget.NewLabel("")
+
+	body := container.New(newRatioHBox(1, 1.08, theme.Padding()*2), leftCol, rightCol)
+
+	// ---- Footer ----
+
+	c.footerDot = &canvas.Circle{FillColor: ringIdle}
+	c.footerText = canvas.NewText("Disconnected · settings loaded", textMuted)
+	c.footerText.TextSize = 12.5
+	footerLeft := container.NewHBox(
+		container.NewGridWrap(fyne.NewSize(10, 10), container.NewCenter(dotWrap(c.footerDot))),
+		c.footerText,
+	)
+
+	c.btnSave = widget.NewButton("Save Settings", c.onSave)
 	c.btnDisc = widget.NewButton("Disconnect", c.onDisconnect)
 	c.btnCancel = widget.NewButton("Cancel", c.onCancel)
 	c.btnConn = widget.NewButton("Connect", c.onConnect)
 	c.btnConn.Importance = widget.HighImportance
 
-	buttonRow := container.NewPadded(
-		container.NewHBox(
-			c.btnSave,
-			layout.NewSpacer(),
-			container.NewHBox(c.btnDisc, c.btnCancel, c.btnConn),
-		),
-	)
+	footer := container.NewPadded(container.NewBorder(nil, nil, footerLeft, nil,
+		container.NewHBox(layout.NewSpacer(), c.btnSave, c.btnDisc, c.btnCancel, c.btnConn),
+	))
 
-	root := container.NewBorder(header, buttonRow, nil, nil, body)
-	return container.NewPadded(root)
+	// Title strip (fix #5): app name left, protocol label right, in mono.
+	appName := canvas.NewText("Vepeen", textPrimary)
+	appName.TextStyle = fyne.TextStyle{Bold: true}
+	appName.TextSize = 15
+	proto := mono("L2TP/IPsec · split tunnel", 12, color.NRGBA{R: 0x56, G: 0x66, B: 0x6b, A: 0xff})
+	titleStrip := container.NewPadded(container.NewBorder(nil, nil, appName, proto))
+
+	content := container.NewBorder(titleStrip, footer, nil, nil, container.NewPadded(body))
+	return container.NewStack(bgLayer(), content)
 }
 
-// appendLog adds a timestamped line to the activity log (UI thread only).
-// Never pass PSK, password, or secret-bearing command lines.
+// dotWrap sizes a status circle to a small fixed square.
+func dotWrap(c *canvas.Circle) fyne.CanvasObject {
+	return container.NewGridWrap(fyne.NewSize(10, 10), c)
+}
+
+// updateRouteCount refreshes the "N routes" label: non-empty, non-# lines.
+func (c *controller) updateRouteCount() {
+	if c.routeCount == nil {
+		return
+	}
+	n := 0
+	for _, ln := range strings.Split(c.routesEntry.Text, "\n") {
+		s := strings.TrimSpace(ln)
+		if s != "" && !strings.HasPrefix(s, "#") {
+			n++
+		}
+	}
+	suffix := "routes"
+	if n == 1 {
+		suffix = "route"
+	}
+	c.routeCount.Text = fmt.Sprintf("%d %s", n, suffix)
+	c.routeCount.Refresh()
+}
+
+// onHeroTap routes a ring tap to connect or disconnect based on state.
+func (c *controller) onHeroTap() {
+	switch c.state {
+	case vpn.StatusConnected:
+		c.onDisconnect()
+	case vpn.StatusConnecting:
+		c.onCancel()
+	default:
+		c.onConnect()
+	}
+}
+
+// appendLog adds a timestamped, color-coded line to the activity log (UI thread
+// only). Never pass PSK, password, or secret-bearing command lines.
 func (c *controller) appendLog(msg string) {
-	if c.logEntry == nil {
+	if c.logView == nil {
 		return
 	}
 	msg = strings.TrimSpace(msg)
 	if msg == "" {
 		return
 	}
-	line := time.Now().Format("15:04:05") + "  " + msg
-	cur := c.logEntry.Text
-	var next string
-	if cur == "" {
-		next = line
-	} else {
-		next = cur + "\n" + line
+	// Defensive cap: a runaway line must never widen the window (log scrolls, but
+	// keep rows sane). 300 chars is plenty for any real status message.
+	if len(msg) > 300 {
+		msg = msg[:300] + "…"
 	}
-	lines := strings.Split(next, "\n")
-	if len(lines) > maxLogLines {
-		lines = lines[len(lines)-maxLogLines:]
-		next = strings.Join(lines, "\n")
+	c.logView.Append(time.Now().Format("15:04:05"), msg, classifyLog(msg))
+}
+
+// classifyLog picks a log row color from the message content.
+func classifyLog(msg string) logKind {
+	l := strings.ToLower(msg)
+	switch {
+	case strings.Contains(l, "connected") || strings.Contains(l, "applied") ||
+		strings.Contains(l, "saved") || strings.Contains(l, "active"):
+		return logOK
+	case strings.Contains(l, "fail") || strings.Contains(l, "error") ||
+		strings.Contains(l, "skipped") || strings.Contains(l, "not ") ||
+		strings.Contains(l, "cannot") || strings.Contains(l, "invalid") ||
+		strings.Contains(l, "warn"):
+		return logWarn
+	case strings.Contains(l, "cancel") || strings.Contains(l, "cleared") ||
+		strings.Contains(l, "ready") || strings.Contains(l, "diagnostics"):
+		return logMuted
+	default:
+		return logInfo
 	}
-	c.logEntry.SetText(next)
-	// Scroll toward end for long history.
-	c.logEntry.CursorRow = len(lines) - 1
-	c.logEntry.Refresh()
 }
 
 func (c *controller) appendLogf(format string, args ...any) {
@@ -330,10 +392,10 @@ func (c *controller) appendLogf(format string, args ...any) {
 }
 
 func (c *controller) onClearLog() {
-	if c.logEntry == nil {
+	if c.logView == nil {
 		return
 	}
-	c.logEntry.SetText("")
+	c.logView.Clear()
 	c.appendLog("Log cleared.")
 }
 
@@ -415,6 +477,10 @@ func (c *controller) applyConfig(cfg config.Config) {
 func (c *controller) onProfileChanged(selected string) {
 	c.connectionName = strings.TrimSpace(selected)
 	c.loadCredentials()
+	c.syncIdentity()
+	if c.logView != nil && c.connectionName != "" {
+		c.appendLog("Profile selected · " + c.connectionName)
+	}
 }
 
 // profileName returns the Windows VPN / CredMan profile name (never empty).
@@ -526,10 +592,10 @@ func (c *controller) startTraffic(name string) {
 					hostText = strings.TrimRight(b.String(), "\n")
 				}
 
+				_ = hostText
 				fyne.Do(func() {
-					c.dlLabel.SetText("Download: " + dl)
-					c.ulLabel.SetText("Upload: " + ul)
-					c.hostArea.SetText(hostText)
+					c.setStat(c.statDown, dl)
+					c.setStat(c.statUp, ul)
 				})
 				c.tickBusy.Store(false)
 			}
@@ -544,15 +610,17 @@ func (c *controller) stopTraffic() {
 		c.trafficStop = nil
 	}
 	c.trafficName = ""
-	if c.dlLabel != nil {
-		c.dlLabel.SetText("Download: —")
+	c.setStat(c.statDown, "—")
+	c.setStat(c.statUp, "—")
+}
+
+// setStat updates a hero stat tile value (nil-safe).
+func (c *controller) setStat(t *canvas.Text, v string) {
+	if t == nil {
+		return
 	}
-	if c.ulLabel != nil {
-		c.ulLabel.SetText("Upload: —")
-	}
-	if c.hostArea != nil {
-		c.hostArea.SetText("—")
-	}
+	t.Text = v
+	t.Refresh()
 }
 
 // gatewayHost returns the connected VPN gateway address, or "" when not connected.
@@ -583,7 +651,7 @@ func (c *controller) startPingTicker() {
 			case <-ticker.C:
 				result := pingGateway(c.gatewayHost())
 				fyne.Do(func() {
-					c.pingLabel.SetText(result)
+					c.setStat(c.statPing, result)
 				})
 			}
 		}
@@ -597,7 +665,7 @@ func (c *controller) stopPingTicker() {
 		c.pingStop = nil
 	}
 	fyne.Do(func() {
-		c.pingLabel.SetText("not connected")
+		c.setStat(c.statPing, "not connected")
 	})
 }
 
@@ -636,11 +704,89 @@ func (c *controller) refreshLocalIP() {
 	}()
 }
 
-// setStatus updates short status labels only (does not append log).
+// setStatus updates status labels, the hero ring, and the footer bar.
 func (c *controller) setStatus(state vpn.ConnStatus, primary, detail string) {
 	c.state = state
 	c.statusPri.SetText(primary)
 	c.statusDet.SetText(detail)
+	c.syncVisualState(primary, detail)
+}
+
+// syncVisualState maps the connection state onto the redesign widgets.
+func (c *controller) syncVisualState(primary, detail string) {
+	if c.hero != nil {
+		switch c.state {
+		case vpn.StatusConnecting, vpn.StatusDisconnecting:
+			c.hero.SetState("connecting")
+		case vpn.StatusConnected:
+			c.hero.SetState("connected")
+		default:
+			c.hero.SetState("disconnected")
+		}
+	}
+
+	if c.footerDot != nil && c.footerText != nil {
+		col := stateColor("disconnected")
+		switch c.state {
+		case vpn.StatusConnecting, vpn.StatusDisconnecting:
+			col = stateColor("connecting")
+		case vpn.StatusConnected:
+			col = stateColor("connected")
+		}
+		c.footerDot.FillColor = col
+		c.footerDot.Refresh()
+		txt := primary
+		if detail != "" {
+			txt = primary + " · " + detail
+		}
+		c.footerText.Text = txt
+		c.footerText.Refresh()
+	}
+
+	c.syncCTA()
+	c.syncIdentity()
+}
+
+// syncCTA relabels/recolors the footer primary button per state (hero + CTA
+// share the same action via onHeroTap / the button callbacks).
+func (c *controller) syncCTA() {
+	if c.btnConn == nil {
+		return
+	}
+	// The four footer buttons are all present; applyEnablement decides which are
+	// enabled. Here we only adjust the primary button's label/importance.
+	switch c.state {
+	case vpn.StatusConnected:
+		c.btnConn.SetText("Connect")
+	default:
+		c.btnConn.SetText("Connect")
+	}
+	c.btnConn.Refresh()
+}
+
+// syncIdentity updates the profile name + sub line shown under the hero ring.
+func (c *controller) syncIdentity() {
+	if c.heroName == nil {
+		return
+	}
+	name := strings.TrimSpace(c.profileSelect.Selected)
+	if name == "" {
+		c.heroName.Text = "No profile selected"
+		c.heroSub.Text = "choose a profile to begin"
+	} else {
+		c.heroName.Text = name
+		host := ""
+		if p, ok := c.profiles[name]; ok {
+			host = strings.TrimSpace(p.ServerAddress)
+		}
+		if host != "" {
+			c.heroSub.Text = "L2TP/IPsec · " + host
+		} else {
+			c.heroSub.Text = "L2TP/IPsec"
+		}
+	}
+	c.heroName.Refresh()
+	c.heroSub.Refresh()
 }
 
 func (c *controller) applyEnablement() {
@@ -660,10 +806,7 @@ func (c *controller) applyEnablement() {
 	setEntry(c.userEntry, formEnabled)
 	setEntry(c.passEntry, formEnabled)
 
-	// Log is always non-editable; Clear is always available (UI-only buffer).
-	if c.logEntry != nil {
-		c.logEntry.Disable()
-	}
+	// logView is inherently read-only; Clear is always available (UI-only buffer).
 	if c.btnClearLog != nil {
 		c.btnClearLog.Enable()
 	}
@@ -891,8 +1034,10 @@ func (c *controller) onConnect() {
 			} else {
 				c.setStatus(vpn.StatusConnected, "Connected", "Only the listed IPs/CIDRs route through the VPN.")
 				c.appendLog("Connected. Split tunnel active.")
+				// Diagnostics (raw scutil dump) go to the OS log only — it's one huge
+				// unbreakable line, useless and layout-breaking in the UI.
 				if diag, derr := vpn.ProfileDiagnostics(name); derr == nil && diag != "" {
-					c.appendLog("Diagnostics: " + diag)
+					log.Printf("connect diagnostics: %s", diag)
 				}
 				for _, w := range warnings {
 					c.appendLog(w)

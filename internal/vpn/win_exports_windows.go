@@ -43,8 +43,9 @@ func EnsureSplitTunneling(name string) error {
 	return win.EnsureSplitTunneling(name)
 }
 
-// EnforceSplitTunnel removes a server-pushed default route if present.
-func EnforceSplitTunnel(name string) (string, error) {
+// EnforceSplitTunnel removes a server-pushed default route if present. On Windows
+// routes are attached to the profile pre-dial, so prefixes are unused here.
+func EnforceSplitTunnel(name string, prefixes []string) (string, error) {
 	return win.EnforceSplitTunnel(name)
 }
 

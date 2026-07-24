@@ -1,4 +1,4 @@
-//go:build !windows
+//go:build !windows && !darwin
 
 // Package secrets is retained ONLY as a migration-only, read-only fallback for
 // importing credentials from the legacy Windows Credential Manager into

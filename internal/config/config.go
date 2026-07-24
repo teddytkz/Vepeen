@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 
@@ -93,9 +94,15 @@ func (c Config) withCreds(creds map[string]CredEntry) Stored {
 // running executable so the app is portable (config.json sits next to vepeen.exe).
 // If the executable path cannot be determined, fall back to the per-user config dir.
 func Dir() (string, error) {
-	if exe, err := os.Executable(); err == nil {
-		if dir := filepath.Dir(exe); dir != "" {
-			return dir, nil
+	// macOS: always the per-user config dir (~/Library/Application Support/vepeen).
+	// The exe-adjacent store below is a Windows portable-app choice; on macOS the
+	// binary path is unstable (app bundles, `go run` temp dirs), which silently
+	// lost saved routes/credentials every launch.
+	if runtime.GOOS != "darwin" {
+		if exe, err := os.Executable(); err == nil {
+			if dir := filepath.Dir(exe); dir != "" {
+				return dir, nil
+			}
 		}
 	}
 	base, err := os.UserConfigDir()
