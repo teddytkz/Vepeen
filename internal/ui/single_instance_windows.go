@@ -28,9 +28,9 @@ var (
 )
 
 const (
-	asfwAny         = 0xFFFF     // AllowSetForegroundWindow: any process may set foreground
-	waitInfinite    = 0xFFFFFFFF // WaitForSingleObject: wait forever
-	eventModifyState = 0x0002    // EVENT_MODIFY_STATE — required to SetEvent
+	asfwAny          = 0xFFFF     // AllowSetForegroundWindow: any process may set foreground
+	waitInfinite     = 0xFFFFFFFF // WaitForSingleObject: wait forever
+	eventModifyState = 0x0002     // EVENT_MODIFY_STATE — required to SetEvent
 	synchronize      = 0x00100000 // SYNCHRONIZE — required to wait on the event
 )
 
