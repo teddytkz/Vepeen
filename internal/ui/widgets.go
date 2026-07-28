@@ -345,27 +345,6 @@ func (r *tealCheckRenderer) Objects() []fyne.CanvasObject {
 
 func (r *tealCheckRenderer) Destroy() {}
 
-// passwordWithToggle returns a password entry overlaid with a trailing mono
-// "show"/"hide" button that flips masking. The entry is returned so the caller
-// can read/set its text.
-func passwordWithToggle() (*widget.Entry, fyne.CanvasObject) {
-	e := widget.NewPasswordEntry()
-	e.SetPlaceHolder("Password")
-	toggle := widget.NewButton("show", nil)
-	toggle.Importance = widget.LowImportance
-	toggle.OnTapped = func() {
-		e.Password = !e.Password
-		if e.Password {
-			toggle.SetText("show")
-		} else {
-			toggle.SetText("hide")
-		}
-		e.Refresh()
-	}
-	// Border layout: entry fills, toggle pinned right.
-	return e, container.NewBorder(nil, nil, nil, toggle, e)
-}
-
 // primaryButton styles a teal-filled CTA with dark text (design footer CTA).
 func primaryButton(label string, tapped func()) *widget.Button {
 	b := widget.NewButton(label, tapped)
@@ -383,53 +362,91 @@ const (
 	logMuted
 )
 
-func (k logKind) color() color.NRGBA {
+func (k logKind) colorName() fyne.ThemeColorName {
 	switch k {
 	case logOK:
-		return accentColor
+		return colorNameLogOK
 	case logWarn:
-		return warnColor
+		return colorNameLogWarn
 	case logMuted:
-		return monoFaint
+		return colorNameLogMuted
 	default:
-		return textSecondary // info #b9c6c9 (fix #4: not the faint gray)
+		return colorNameLogInfo // info #b9c6c9 (fix #4: not the faint gray)
 	}
 }
 
-// logView is a scrollable, per-row-colored activity log (fix #4). Each row is a
-// dim mono timestamp + a colored mono message. Capped; auto-scrolls to bottom.
+// logRow is one activity-log entry (timestamp + message + color kind).
+type logRow struct {
+	ts   string
+	msg  string
+	kind logKind
+}
+
+// logView is a scrollable, per-row-colored activity log (fix #4). All rows are
+// accumulated into a single RichText (timestamp inline, message block) so lines
+// stay tight and single-spaced — no inter-row VBox padding. Capped; auto-scrolls.
 type logView struct {
 	widget.BaseWidget
-	rows   *fyne.Container // VBox of row containers
+	rt     *widget.RichText
 	scroll *container.Scroll
+	rows   []logRow
 	cap    int
 }
 
 func newLogView(capLines int) *logView {
-	l := &logView{rows: container.NewVBox(), cap: capLines}
-	// Scroll in BOTH directions: a long single line scrolls horizontally inside
-	// the box instead of forcing the whole window wider (the connected-state
-	// blowout bug — a raw diagnostics line was unbreakable and unbounded).
-	l.scroll = container.NewScroll(l.rows)
+	l := &logView{cap: capLines}
+	l.rt = widget.NewRichText()
+	l.rt.Wrapping = fyne.TextWrapWord
+	l.scroll = container.NewScroll(l.rt)
 	l.ExtendBaseWidget(l)
 	return l
 }
 
-// Append adds a "HH:MM:SS  message" row in the kind's color and scrolls to bottom.
+// Append adds a "HH:MM:SS  message" row (timestamp inline, message block) and
+// scrolls to bottom. One tight line per entry — no inter-row VBox padding.
 func (l *logView) Append(ts, msg string, kind logKind) {
-	t := mono(ts, 12, monoFaint) // timestamp #4a5a5e
-	m := mono(msg, 12, kind.color())
-	l.rows.Add(container.NewHBox(t, m))
-	if len(l.rows.Objects) > l.cap {
-		l.rows.Remove(l.rows.Objects[0])
+	l.rows = append(l.rows, logRow{ts: ts, msg: msg, kind: kind})
+	if len(l.rows) > l.cap {
+		// drop oldest
+		l.rows = l.rows[len(l.rows)-l.cap:]
 	}
-	l.rows.Refresh()
+	l.rebuild()
+}
+
+// rebuild rewrites the single RichText's segments from the capped row slice.
+func (l *logView) rebuild() {
+	segs := make([]widget.RichTextSegment, 0, len(l.rows)*2)
+	for _, r := range l.rows {
+		segs = append(segs,
+			&widget.TextSegment{
+				Text: r.ts + "  ",
+				Style: widget.RichTextStyle{
+					Inline:    true,
+					TextStyle: fyne.TextStyle{Monospace: true},
+					ColorName: colorNameLogTs,
+					SizeName:  sizeNameLog,
+				},
+			},
+			&widget.TextSegment{
+				Text: r.msg,
+				Style: widget.RichTextStyle{
+					Inline:    false, // block → ends the line; next entry starts fresh
+					TextStyle: fyne.TextStyle{Monospace: true},
+					ColorName: r.kind.colorName(),
+					SizeName:  sizeNameLog,
+				},
+			},
+		)
+	}
+	l.rt.Segments = segs
+	l.rt.Refresh()
+	l.scroll.Refresh()
 	l.scroll.ScrollToBottom()
 }
 
 func (l *logView) Clear() {
-	l.rows.RemoveAll()
-	l.rows.Refresh()
+	l.rows = nil
+	l.rebuild()
 }
 
 func (l *logView) CreateRenderer() fyne.WidgetRenderer {

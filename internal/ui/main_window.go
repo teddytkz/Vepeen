@@ -142,14 +142,13 @@ type controller struct {
 	logView       *logView
 
 	btnSave     *widget.Button
-	btnDisc     *widget.Button
 	btnConn     *widget.Button
-	btnCancel   *widget.Button
 	btnClearLog *widget.Button
 	statusPri   *widget.Label
 	statusDet   *widget.Label
 
 	rememberCheck *tealCheck
+	routeAllCheck *tealCheck
 	hostArea      *widget.Entry
 	dlLabel       *widget.Label
 	tickBusy      atomic.Bool
@@ -197,15 +196,15 @@ func (c *controller) build() fyne.CanvasObject {
 
 	c.userEntry = widget.NewEntry()
 	c.userEntry.SetPlaceHolder("Username")
-	var passField fyne.CanvasObject
-	c.passEntry, passField = passwordWithToggle()
+	c.passEntry = widget.NewPasswordEntry()
+	c.passEntry.SetPlaceHolder("Password")
 	c.rememberCheck = newTealCheck("Remember credentials", nil)
 	c.rememberCheck.SetChecked(true)
 
 	cardCreds := card(container.NewVBox(
 		sectionLabel("CREDENTIALS"),
 		c.userEntry,
-		passField,
+		c.passEntry,
 		c.rememberCheck,
 		helperText("Leave blank to use credentials saved in Keychain."),
 	))
@@ -220,9 +219,12 @@ func (c *controller) build() fyne.CanvasObject {
 	c.routeCount = mono("0 routes", 11, textFaint)
 	routesHeader := container.NewBorder(nil, nil, sectionLabel("SPLIT TUNNEL ROUTES"), c.routeCount)
 
+	c.routeAllCheck = newTealCheck("Route All Traffic", nil)
+
 	cardRoutes := card(container.NewBorder(
 		container.NewVBox(routesHeader, helperText("Only these destinations route through the VPN.")),
-		nil, nil, nil,
+		c.routeAllCheck,
+		nil, nil,
 		c.routesEntry,
 	))
 
@@ -286,19 +288,18 @@ func (c *controller) build() fyne.CanvasObject {
 	c.footerDot = &canvas.Circle{FillColor: ringIdle}
 	c.footerText = canvas.NewText("Disconnected · settings loaded", textMuted)
 	c.footerText.TextSize = 12.5
+	// Status dot sized to the text and vertically centered with the label.
 	footerLeft := container.NewHBox(
-		container.NewGridWrap(fyne.NewSize(10, 10), container.NewCenter(dotWrap(c.footerDot))),
+		container.NewCenter(container.NewGridWrap(fyne.NewSize(11, 11), c.footerDot)),
 		c.footerText,
 	)
 
 	c.btnSave = widget.NewButton("Save Settings", c.onSave)
-	c.btnDisc = widget.NewButton("Disconnect", c.onDisconnect)
-	c.btnCancel = widget.NewButton("Cancel", c.onCancel)
-	c.btnConn = widget.NewButton("Connect", c.onConnect)
+	c.btnConn = widget.NewButton("Connect", c.onHeroTap)
 	c.btnConn.Importance = widget.HighImportance
 
 	footer := container.NewPadded(container.NewBorder(nil, nil, footerLeft, nil,
-		container.NewHBox(layout.NewSpacer(), c.btnSave, c.btnDisc, c.btnCancel, c.btnConn),
+		container.NewHBox(layout.NewSpacer(), c.btnSave, c.btnConn),
 	))
 
 	// Title strip (fix #5): app name left, protocol label right, in mono.
@@ -310,11 +311,6 @@ func (c *controller) build() fyne.CanvasObject {
 
 	content := container.NewBorder(titleStrip, footer, nil, nil, container.NewPadded(body))
 	return container.NewStack(bgLayer(), content)
-}
-
-// dotWrap sizes a status circle to a small fixed square.
-func dotWrap(c *canvas.Circle) fyne.CanvasObject {
-	return container.NewGridWrap(fyne.NewSize(10, 10), c)
 }
 
 // updateRouteCount refreshes the "N routes" label: non-empty, non-# lines.
@@ -372,7 +368,8 @@ func classifyLog(msg string) logKind {
 	l := strings.ToLower(msg)
 	switch {
 	case strings.Contains(l, "connected") || strings.Contains(l, "applied") ||
-		strings.Contains(l, "saved") || strings.Contains(l, "active"):
+		strings.Contains(l, "saved") || strings.Contains(l, "active") ||
+		strings.Contains(l, "vpn traffic"):
 		return logOK
 	case strings.Contains(l, "fail") || strings.Contains(l, "error") ||
 		strings.Contains(l, "skipped") || strings.Contains(l, "not ") ||
@@ -448,7 +445,7 @@ func (c *controller) loadInitial() {
 		fyne.Do(func() {
 			if st == vpn.StatusConnected {
 				c.state = vpn.StatusConnected
-				c.setStatus(vpn.StatusConnected, "Connected", "Only the listed IPs/CIDRs route through the VPN.")
+				c.setStatus(vpn.StatusConnected, "Connected", "No active connections through the VPN.")
 				c.refreshLocalIP()
 				c.appendLog("Already connected (OS status).")
 				c.applyEnablement()
@@ -470,6 +467,7 @@ func (c *controller) applyConfig(cfg config.Config) {
 	if len(cfg.Routes) > 0 {
 		c.routesEntry.SetText(strings.Join(cfg.Routes, "\n"))
 	}
+	c.routeAllCheck.SetChecked(cfg.RouteAllTraffic)
 }
 
 // onProfileChanged updates the selected connection. The routes text is global
@@ -521,12 +519,14 @@ func (c *controller) persistCredentials(name, user, pass string) {
 	_ = config.SaveStored(c.stored)
 }
 
-// formatRate renders a bytes-per-second value as KB/s or MB/s.
+// formatRate converts a bytes-per-second value to bits-per-second and renders
+// it as Kbps or Mbps (network rate units), auto-scaling to the appropriate unit.
 func formatRate(bytesPerSec float64) string {
-	if bytesPerSec >= float64(1<<20) {
-		return fmt.Sprintf("%.1f MB/s", bytesPerSec/float64(1<<20))
+	bitsPerSec := bytesPerSec * 8
+	if bitsPerSec >= 1e6 {
+		return fmt.Sprintf("%.1f Mbps", bitsPerSec/1e6)
 	}
-	return fmt.Sprintf("%d KB/s", int(bytesPerSec/float64(1<<10)))
+	return fmt.Sprintf("%.0f Kbps", bitsPerSec/1e3)
 }
 
 // startTraffic launches a ~1/sec ticker that samples live download/upload rates
@@ -540,7 +540,10 @@ func (c *controller) startTraffic(name string) {
 		ticker := time.NewTicker(time.Second)
 		defer ticker.Stop()
 		var prevRx, prevTx uint64
+		var prevAt time.Time
 		var havePrev bool
+		var prevConns string
+		var connBusy atomic.Bool
 		for {
 			select {
 			case <-stop:
@@ -551,53 +554,78 @@ func (c *controller) startTraffic(name string) {
 				}
 
 				rx, tx, err := vpn.TrafficCounters(name)
-				dl, ul := "0 KB/s", "0 KB/s"
+				var dl, ul string
+				setRates := false
+				now := time.Now()
 				if err == nil {
-					if !havePrev && (rx > 0 || tx > 0) {
+					switch {
+					case rx == 0 && tx == 0:
+						// Soft-fail or empty: drop baseline so next real sample does not spike.
+						havePrev = false
+					case havePrev && (rx < prevRx || tx < prevTx):
+						// Counter reset / rebind: re-baseline, no rate this tick.
+						prevRx, prevTx, prevAt = rx, tx, now
+					case !havePrev:
+						prevRx, prevTx, prevAt = rx, tx, now
 						havePrev = true
-					}
-					if havePrev {
-						dRx := float64(rx - prevRx)
-						dTx := float64(tx - prevTx)
-						if dRx < 0 {
-							dRx = 0
+						dl, ul, setRates = "0 Kbps", "0 Kbps", true
+					default:
+						elapsed := now.Sub(prevAt).Seconds()
+						if elapsed >= 0.1 {
+							dl = formatRate(float64(rx-prevRx) / elapsed)
+							ul = formatRate(float64(tx-prevTx) / elapsed)
+							prevRx, prevTx, prevAt = rx, tx, now
+							setRates = true
 						}
-						if dTx < 0 {
-							dTx = 0
-						}
-						dl = formatRate(dRx)
-						ul = formatRate(dTx)
 					}
-					prevRx, prevTx = rx, tx
 				}
+				if setRates {
+					fyne.Do(func() {
+						if c.state != vpn.StatusConnected {
+							return
+						}
+						c.setStat(c.statDown, dl)
+						c.setStat(c.statUp, ul)
+					})
+				}
+				// Release before ActiveConnections (slow reverse DNS must not block rate ticks).
+				c.tickBusy.Store(false)
 
-				hostText := "No active TCP connections through the VPN"
-				if conns, cerr := vpn.ActiveConnections(name); cerr == nil && len(conns) > 0 {
-					var b strings.Builder
+				// Surface hosts routed through the VPN; skip if a poll is already in flight.
+				if !connBusy.CompareAndSwap(false, true) {
+					continue
+				}
+				go func() {
+					defer connBusy.Store(false)
+					conns, cerr := vpn.ActiveConnections(name)
+					if cerr != nil {
+						return
+					}
+					var parts []string
 					for _, ac := range conns {
 						if ac.Hostname != "" {
-							b.WriteString(ac.Hostname)
-							b.WriteString(" (")
-							b.WriteString(ac.RemoteAddr)
-							b.WriteString(":")
-							b.WriteString(ac.RemotePort)
-							b.WriteString(")\n")
+							parts = append(parts, ac.Hostname+" ("+ac.RemoteAddr+":"+ac.RemotePort+")")
 						} else {
-							b.WriteString(ac.RemoteAddr)
-							b.WriteString(":")
-							b.WriteString(ac.RemotePort)
-							b.WriteString("\n")
+							parts = append(parts, ac.RemoteAddr+":"+ac.RemotePort)
 						}
 					}
-					hostText = strings.TrimRight(b.String(), "\n")
-				}
-
-				_ = hostText
-				fyne.Do(func() {
-					c.setStat(c.statDown, dl)
-					c.setStat(c.statUp, ul)
-				})
-				c.tickBusy.Store(false)
+					sig := strings.Join(parts, ", ")
+					if sig == prevConns {
+						return
+					}
+					prevConns = sig
+					fyne.Do(func() {
+						if c.state != vpn.StatusConnected {
+							return
+						}
+						if sig != "" {
+							c.appendLog("VPN traffic: " + sig)
+							c.setStatus(vpn.StatusConnected, "Connected", "Traffic Route On")
+						} else {
+							c.setStatus(vpn.StatusConnected, "Connected", "No active connections through the VPN.")
+						}
+					})
+				}()
 			}
 		}
 	}()
@@ -683,7 +711,8 @@ func (c *controller) refreshLocalIP() {
 				ip := addrs[0].IP
 				mask := addrs[0].Mask
 				if ip != nil && mask != nil {
-					info = ip.String() + "/" + net.IP(mask).String()
+					ones, _ := mask.Size()
+					info = fmt.Sprintf("%s/%s/%d", ip.String(), net.IP(mask).String(), ones)
 					break
 				}
 			}
@@ -700,6 +729,8 @@ func (c *controller) refreshLocalIP() {
 				return
 			}
 			c.statusPri.SetText(c.statusPri.Text + " - " + info)
+			c.heroSub.Text = info
+			c.heroSub.Refresh()
 		})
 	}()
 }
@@ -747,19 +778,25 @@ func (c *controller) syncVisualState(primary, detail string) {
 	c.syncIdentity()
 }
 
-// syncCTA relabels/recolors the footer primary button per state (hero + CTA
-// share the same action via onHeroTap / the button callbacks).
+// syncCTA updates the single call-to-action button's label and importance
+// to reflect the current connection state.
 func (c *controller) syncCTA() {
 	if c.btnConn == nil {
 		return
 	}
-	// The four footer buttons are all present; applyEnablement decides which are
-	// enabled. Here we only adjust the primary button's label/importance.
 	switch c.state {
+	case vpn.StatusDisconnected, vpn.StatusError, vpn.StatusUnknown:
+		c.btnConn.SetText("Connect")
+		c.btnConn.Importance = widget.HighImportance
+	case vpn.StatusConnecting:
+		c.btnConn.SetText("Cancel")
+		c.btnConn.Importance = widget.DangerImportance
 	case vpn.StatusConnected:
-		c.btnConn.SetText("Connect")
-	default:
-		c.btnConn.SetText("Connect")
+		c.btnConn.SetText("Disconnect")
+		c.btnConn.Importance = widget.MediumImportance
+	case vpn.StatusDisconnecting:
+		c.btnConn.SetText("Disconnecting…")
+		c.btnConn.Importance = widget.MediumImportance
 	}
 	c.btnConn.Refresh()
 }
@@ -775,14 +812,19 @@ func (c *controller) syncIdentity() {
 		c.heroSub.Text = "choose a profile to begin"
 	} else {
 		c.heroName.Text = name
-		host := ""
-		if p, ok := c.profiles[name]; ok {
-			host = strings.TrimSpace(p.ServerAddress)
-		}
-		if host != "" {
-			c.heroSub.Text = "L2TP/IPsec · " + host
+		if c.state == vpn.StatusConnected {
+			// heroSub shows the VPN local IP/subnet once refreshLocalIP resolves it.
+			c.heroSub.Text = "L2TP/IPsec · connected"
 		} else {
-			c.heroSub.Text = "L2TP/IPsec"
+			host := ""
+			if p, ok := c.profiles[name]; ok {
+				host = strings.TrimSpace(p.ServerAddress)
+			}
+			if host != "" {
+				c.heroSub.Text = "L2TP/IPsec · " + host
+			} else {
+				c.heroSub.Text = "L2TP/IPsec"
+			}
 		}
 	}
 	c.heroName.Refresh()
@@ -793,7 +835,6 @@ func (c *controller) applyEnablement() {
 	formEnabled := c.state == vpn.StatusDisconnected || c.state == vpn.StatusError
 	busyConnect := c.state == vpn.StatusConnecting
 	busyDisc := c.state == vpn.StatusDisconnecting
-	connected := c.state == vpn.StatusConnected
 
 	setEntry := func(e *widget.Entry, on bool) {
 		if on {
@@ -811,33 +852,25 @@ func (c *controller) applyEnablement() {
 		c.btnClearLog.Enable()
 	}
 
-	if busyConnect || busyDisc || c.busy {
+	if busyConnect || busyDisc || c.state == vpn.StatusConnected || c.busy {
 		c.btnSave.Disable()
 	} else {
 		c.btnSave.Enable()
 	}
 
-	if formEnabled && !c.busy {
+	// Single CTA button enablement, driven by state + generic busy lock.
+	switch c.state {
+	case vpn.StatusDisconnected, vpn.StatusError, vpn.StatusUnknown,
+		vpn.StatusConnecting, vpn.StatusConnected:
 		c.btnConn.Enable()
-	} else {
+	default: // Disconnecting
 		c.btnConn.Disable()
 	}
-
-	if connected && !c.busy {
-		c.btnDisc.Enable()
-	} else {
-		c.btnDisc.Disable()
-	}
-
-	if busyConnect || busyDisc {
+	// Disable the CTA only when busy in a non-cancellable state, or while
+	// disconnecting. During Connecting the button is "Cancel" and must stay
+	// enabled so the user can abort the connection.
+	if c.busy && c.state != vpn.StatusConnecting {
 		c.btnConn.Disable()
-		c.btnDisc.Disable()
-	}
-
-	if busyConnect {
-		c.btnCancel.Enable()
-	} else {
-		c.btnCancel.Disable()
 	}
 }
 
@@ -873,6 +906,7 @@ func (c *controller) onSave() {
 	c.stored.SelectedProfile = name
 	c.stored.Routes = routes
 	c.stored.RememberCredentials = c.rememberCheck.Checked
+	c.stored.RouteAllTraffic = c.routeAllCheck.Checked
 	c.cfg = c.stored.Config()
 	cfg := c.stored
 	keepState := c.state
@@ -947,10 +981,11 @@ func (c *controller) onConnect() {
 	c.connectionName = c.profileSelect.Selected
 
 	req := vpn.ConnectRequest{
-		Name:       name,
-		Username:   strings.TrimSpace(c.userEntry.Text),
-		Password:   c.passEntry.Text,
-		RoutesText: c.routesEntry.Text,
+		Name:            name,
+		Username:        strings.TrimSpace(c.userEntry.Text),
+		Password:        c.passEntry.Text,
+		RoutesText:      c.routesEntry.Text,
+		RouteAllTraffic: c.routeAllCheck.Checked,
 	}
 
 	// Fall back to stored credentials when the form is empty and remember is on.
@@ -1032,7 +1067,7 @@ func (c *controller) onConnect() {
 					}
 				}
 			} else {
-				c.setStatus(vpn.StatusConnected, "Connected", "Only the listed IPs/CIDRs route through the VPN.")
+				c.setStatus(vpn.StatusConnected, "Connected", "No active connections through the VPN.")
 				c.appendLog("Connected. Split tunnel active.")
 				// Diagnostics (raw scutil dump) go to the OS log only — it's one huge
 				// unbreakable line, useless and layout-breaking in the UI.
@@ -1122,7 +1157,7 @@ func (c *controller) validateConnect() (string, fyne.Focusable) {
 	if err != nil {
 		return err.Error(), c.routesEntry
 	}
-	if len(prefixes) == 0 {
+	if len(prefixes) == 0 && !c.routeAllCheck.Checked {
 		return "Enter at least one IP, CIDR, or domain name for split tunnel.", c.routesEntry
 	}
 	return "", nil

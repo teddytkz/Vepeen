@@ -1,5 +1,46 @@
 ## [Unreleased]
 
+### Changed
+
+- [2026-07-24] **docs-002** Minor docs: add compact **Platform support** section to root `README.md` (matrix + macOS partial gaps + Linux stub gaps + Linux needs). Windows remains primary; do not claim macOS/Linux full support. Insert after Project layout, before Security notes. Plan: `docs/planning/docs-002-platform-support-notes.md`. Agent: Documentation → Debugger/Reviewer. Files: `README.md` only.
+
+- [2026-07-24] **docs-001** Major docs: rewrite root `README.md` to match current product (existing OS VPN profiles, English UI, Route All Traffic, domain routes, `bin/vepeen.exe`, `vpn/win`+`vpn/shared`). Plan: `docs/planning/docs-001-readme-rewrite.md`. Agent: Documentation → Debugger/Reviewer. Files: `README.md` only.
+
+### Fixed
+
+- [2026-07-24] **fix-023** Medium: traffic rate tiles wrong / hang / spike. Root causes in `startTraffic` (`internal/ui/main_window.go`): (1) first sample uses lifetime octets as 1s rate; (2) no elapsed-time normalization so multi-second deltas look like 1s; (3) `tickBusy` held across slow `ActiveConnections` → skipped ticks + hang; (4) dead `uint64` underflow check. Keep `formatRate` `*8` bits math. Fix sampling only + small `format_rate_test.go`. See `docs/planning/fix-023-traffic-rate-sampling.md`. Agent: Frontend Developer → Debugger/Reviewer.
+
+- [2026-07-24] **fix-022** Critical: entry caret invisible because `SizeNameInputBorder` is `0` in `internal/ui/theme.go` — Fyne v2.8 uses that size as caret **width** in `entryContentRenderer.moveCursor`. One-liner: `return 0` → `return 1` (comment: caret width; border still invisible via `ColorNameInputBorder=Transparent`). Keep Primary teal; no custom Entry. See `docs/planning/fix-022-entry-caret-width.md`. Agent: Frontend Developer → Debugger/Reviewer.
+
+- [2026-07-24] **fix-021** Low: three UI polish items (status detail, routes height, entry caret). See `docs/planning/fix-021-ui-status-routes-cursor.md`.
+  - **Status detail:** in `(*controller).startTraffic` (`internal/ui/main_window.go`), when traffic exists keep `appendLog("VPN traffic: "+sig)` but change `setStatus` detail from `"VPN traffic: "+sig` to `"Traffic Route On"` (no URL/IP in footer). Empty-traffic detail unchanged.
+  - **Routes height:** rebuild `cardRoutes` in `build()` from `VBox(header, helper, routesEntry, routeAllCheck)` to `Border(top=header+helper, bottom=routeAllCheck, center=routesEntry)` so the multi-line entry expands into the empty space above the checkbox (mirror `cardLog`). Optionally bump `SetMinRowsVisible` 6→10 only if still short.
+  - **Caret (superseded by fix-022):** fix-021 assumed color (`ColorNamePrimary`); actual bug was caret **width** via `SizeNameInputBorder=0`. Do not Primary→white for caret. See fix-022.
+  - **Out of scope:** VPN backend, `ActiveConnections`, log detail format, README. Agent: Frontend Developer → Debugger/Reviewer.
+
+### Added
+
+- [2026-07-24] **prd-006** Minor: add a "Route All Traffic" checkbox under the split-tunnel routes text area. When checked, all traffic routes through the VPN (split tunneling disabled, server default gateway used); default unchecked on open. Add `RouteAllTraffic bool` (`json:"routeAllTraffic"`) to `Config` + `Stored` in `internal/config/config.go` and thread through `Default()`, `DefaultStored()`, `Config()`, `withCreds`. In `internal/ui/main_window.go` add `routeAllCheck *tealCheck`, create via `newTealCheck("Route All Traffic", nil)` in `build()` (below helper text), set from config in `applyConfig`, write in `onSave`, pass in `onConnect`, and relax the empty-routes guard in `validateConnect` when checked. In `internal/vpn/manager.go` add `RouteAllTraffic bool` to `ConnectRequest` and, in `ConnectFull`, skip the empty-prefix guard + `ensureSplitTunnelingFn` + `syncRoutesFn` + `EnforceSplitTunnel` when set (NAT-T, `DisconnectAllExcept`, `connectFn` still run). Routes text area stays editable but unused when checked. Agent: Backend Developer → Debugger/Reviewer.
+
+### Changed
+
+- [2026-07-24] **fix-020** Low: merge the three footer buttons (Connect / Cancel / Disconnect) into a single stateful CTA button. Remove `btnDisc` and `btnCancel` struct fields + creation lines (lines 145-147, 295-296) and their footer layout references (line 301 → `container.NewHBox(layout.NewSpacer(), c.btnSave, c.btnConn)`). Rewire `c.btnConn` `OnTapped` to the existing `c.onHeroTap` router (line 297). Rewrite `syncCTA()` (lines 752-766) to set label + `Importance` by state: Disconnected/Error/Unknown → "Connect" (High), Connecting → "Cancel" (Danger/Warning), Connected → "Disconnect" (Medium/Low), Disconnecting → "Disconnecting…". Rewrite the button-enable block in `applyEnablement()` (lines 790-843) to drive only `c.btnConn` (enabled for Disconnected/Error/Unknown/Connecting/Connected, disabled for Disconnecting or generic `busy`); delete all `btnDisc`/`btnCancel` references and now-unused `busyConnect`/`busyDisc`/`connected` vars. `onConnect`/`onCancel`/`onDisconnect` unchanged. `go build ./...` and `go vet ./internal/ui/...` must pass. Agent: Frontend Developer → Debugger/Reviewer.
+
+- [2026-07-24] **ui-rate-ping-format** Minor: fix ping and traffic-rate display units.
+  - **Ping display (no space before "ms"):** remove the space so values read `11ms` instead of `11 ms`.
+    - `internal/ui/ping_windows.go` (lines 24, 27): change `" — <1 ms"` → `" — <1ms"` and `" — " + strconv.FormatUint(...) + " ms"` → `" — " + strconv.FormatUint(...) + "ms"`.
+    - `internal/ui/shims_darwin.go` (line 19): change `fmt.Sprintf("%d ms", ms)` → `fmt.Sprintf("%dms", ms)`.
+  - **Traffic rate (bits, not bytes):** `formatRate` in `internal/ui/main_window.go` (lines 524-530) currently divides bytes/sec by 1<<20 / 1<<10 and labels them `MB/s` / `KB/s`. The underlying value is actually Mbps (bits). Change to multiply bytes/sec by 8 to get bits/sec, then auto-format: if `bitsPerSec >= 1e6` return `fmt.Sprintf("%.1f Mbps", bitsPerSec/1e6)`, else return `fmt.Sprintf("%.0f Kbps", bitsPerSec/1e3)`. Keep the `func formatRate(bytesPerSec float64) string` signature unchanged.
+  - **Notes:** No changes to the traffic ticker call sites (~line 554, 590-598) — they still pass bytes/sec deltas; only the formatting/units change. No new files; follow existing Go conventions. `go build ./...` and `go vet ./internal/ui/...` must pass. Agent: Frontend Developer → Debugger/Reviewer.
+
+- [2026-07-24] **ui-ping-hide-host** Minor: ping display should show only the latency, not the host.
+  - `internal/ui/ping_windows.go` (`pingGateway`, lines 21-28): drop the `host + " — "` prefix from the three display branches; keep the `host` parameter (still used by `vpn.PingHost(host, 1000)`) and keep the `host == ""` → `"not connected"` branch unchanged.
+    - Timeout branch: `host + " — timeout / no reply"` → `"timeout / no reply"`.
+    - `<1ms` branch: `host + " — <1ms"` → `"<1ms"`.
+    - Numeric branch: `host + " — " + strconv.FormatUint(uint64(rtt), 10) + "ms"` → `strconv.FormatUint(uint64(rtt), 10) + "ms"`.
+  - **No change needed:** `internal/ui/shims_darwin.go` already returns `%dms` (no host); `internal/ui/ping_other.go` returns a static string.
+  - **Notes:** No new files; follow existing Go conventions. `go build ./...` and `go vet ./internal/ui/...` must pass. Agent: Frontend Developer → Debugger/Reviewer.
+
 ### Fixed
 
 - [2026-07-24] **fix-019** High: blank/white window when a second instance re-shows a tray-hidden window. Root cause: `bringExistingToFront()` in `internal/ui/single_instance_windows.go` used native Win32 `ShowWindow(SW_RESTORE)` + `SetForegroundWindow` on the first instance's HWND; after `w.Hide()` Fyne still thinks the window is hidden and skips repainting → blank canvas. Fix: replace the native-show path with an event-signaling mechanism — first instance creates `Global\VepeenShowEvent` and runs `ListenForShowSignal(w)` (goroutine waiting on `WaitForSingleObject`, then `fyne.Do(func(){ w.Show(); w.RequestFocus() })`); second instance calls `SignalExistingInstance()` (`AllowSetForegroundWindow(ASFW_ANY)` + `SetEvent`) and exits. `AcquireSingleInstance()` now creates the event on the owning instance and returns a release func that closes both mutex and event; `cmd/vepeen/main.go` calls `ui.ListenForShowSignal(w)` before `a.Run()`; `single_instance_other.go` gains a no-op `ListenForShowSignal`. Tray hide/show and first-launch `ShowCentered` unchanged. `go build ./...` and `go vet ./internal/ui/...` must pass. Agent: Backend Developer → Debugger/Reviewer.

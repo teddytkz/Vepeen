@@ -16,7 +16,7 @@ func pingGateway(host string) string {
 	if err != nil {
 		return "unreachable"
 	}
-	return fmt.Sprintf("%d ms", ms)
+	return fmt.Sprintf("%dms", ms)
 }
 
 // ShowCentered just shows the window; macOS centers new windows itself.
