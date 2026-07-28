@@ -167,9 +167,11 @@ func LoadStored() (Stored, error) {
 	}
 	plain, derr := decryptDPAPI(data)
 	if derr != nil {
-		// Corrupt/unreadable blob: degrade gracefully (never panic, never log secrets).
-		log.Printf("config: failed to decrypt %s; using defaults", binFileName)
-		return DefaultStored(), nil
+		// The store exists but will not decrypt. Report it: returning defaults
+		// silently makes real settings look like a fresh install, and the next
+		// save then overwrites the still-good file. Never log secrets.
+		log.Printf("config: failed to decrypt %s: %v", binFileName, derr)
+		return DefaultStored(), fmt.Errorf("decrypt config: %w", derr)
 	}
 	var stored Stored
 	if uerr := json.Unmarshal(plain, &stored); uerr != nil {
@@ -333,8 +335,13 @@ func SaveStored(s Stored) error {
 // UI migrates to the Stored API (Phase 3).
 func Save(cfg Config) error {
 	existing, err := LoadStored()
+	if err != nil {
+		// Refuse to overwrite a store we could not read: the credentials we
+		// failed to decrypt are still on disk and would be silently discarded.
+		return fmt.Errorf("load existing config: %w", err)
+	}
 	creds := existing.Credentials
-	if err != nil || creds == nil {
+	if creds == nil {
 		creds = map[string]CredEntry{}
 	}
 	return SaveStored(cfg.withCreds(creds))
