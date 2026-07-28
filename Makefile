@@ -4,7 +4,8 @@
 # bundle is assembled from a plain `go build` plus assets/brand/Vepeen.icns,
 # so there is no dependency on the `fyne` CLI.
 #
-#   make            build the .app
+#   make            build the .app (skips work if already up to date)
+#   make rebuild    force a full rebuild
 #   make run        build and launch it
 #   make dmg        package the .app into a distributable .dmg
 #   make icon       regenerate Vepeen.icns from the SVG master
@@ -24,11 +25,19 @@ SRC      := $(shell find . -name '*.go' -not -path './bin/*')
 export CGO_ENABLED := 1
 GOFLAGS_BUILD := -trimpath -ldflags "-s -w"
 
-.PHONY: all build run dmg icon clean test
+.PHONY: all build rebuild run dmg icon clean test
 
 all: build
 
+# Always reports where the app is. Without this, an up-to-date build prints only
+# make's "Nothing to be done", which reads like a failure.
 build: $(APPDIR)
+	@echo "→ $(APPDIR)   (make run to launch)"
+
+# Force a full rebuild, ignoring timestamps.
+rebuild:
+	@rm -rf $(APPDIR)
+	@$(MAKE) --no-print-directory build
 
 # The bundle is ad-hoc signed: Gatekeeper kills unsigned arm64 binaries, and a
 # stable signing identity keeps the app's Keychain ACL valid across rebuilds.
@@ -51,9 +60,10 @@ $(APPDIR): $(SRC) $(ICNS) Makefile
 	mkdir -p $(BIN); rm -rf $(APPDIR); mv $$stage $(APPDIR)
 	@# Moving into bin/ can re-apply com.apple.FinderInfo (fileprovider again),
 	@# which makes `codesign --verify` fail even though the signature is intact.
+	@# The sync daemon may re-tag it again later; that does not affect launching.
+	@# If `codesign --verify` ever complains about "detritus", run: xattr -c $(APPDIR)
 	@-xattr -c $(APPDIR) 2>/dev/null || true
 	@touch $(APPDIR)
-	@echo "→ $(APPDIR)"
 
 run: build
 	open $(APPDIR)
