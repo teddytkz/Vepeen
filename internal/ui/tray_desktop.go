@@ -29,7 +29,7 @@ func SetupTray(a fyne.App, w fyne.Window, onQuit func()) {
 	desk.SetSystemTrayIcon(icon)
 
 	// Build right-click context menu.
-	menu := fyne.NewMenu("",
+	menu := fyne.NewMenu("Vepeen",
 		fyne.NewMenuItem("Show", func() {
 			w.Show()
 			w.RequestFocus()
