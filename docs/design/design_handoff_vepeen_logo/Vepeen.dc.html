@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  @keyframes vp-spin { to { transform: rotate(360deg); } }
+  @keyframes vp-pulse { 0%,100% { opacity: .35; transform: scale(1); } 50% { opacity: .9; transform: scale(1.03); } }
+  @keyframes vp-blink { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
+  @keyframes vp-breathe { 0%,100% { box-shadow: 0 0 0 0 rgba(45,212,191,0); } 50% { box-shadow: 0 0 60px 8px rgba(45,212,191,.25); } }
+  a { color: #2dd4bf; text-decoration: none; }
+  a:hover { color: #5fe3d3; }
+  *::-webkit-scrollbar { width: 10px; height: 10px; }
+  *::-webkit-scrollbar-thumb { background: rgba(255,255,255,.09); border-radius: 8px; border: 2px solid transparent; background-clip: padding-box; }
+  *::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.16); background-clip: padding-box; }
+  textarea::placeholder, input::placeholder { color: #55666b; }
+</style>
+</helmet>
+<div style="font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', sans-serif; width: 1040px; height: 780px; border-radius: 16px; overflow: hidden; background: linear-gradient(160deg, #121b1e 0%, #0c1214 55%, #0a0f11 100%); box-shadow: 0 40px 120px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.06); color: #e8eef0; display: flex; flex-direction: column; position: relative;">
+
+  <div style="position: absolute; inset: 0; background: radial-gradient(700px 340px at 78% -8%, rgba(45,212,191,.10), transparent 70%); pointer-events: none;"></div>
+
+  <div style="height: 46px; flex: none; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; padding: 0 18px; border-bottom: 1px solid rgba(255,255,255,.05); background: rgba(255,255,255,.015); position: relative; z-index: 2;">
+    <div style="display: flex; gap: 8px; align-items: center;">
+      <span style="width: 12px; height: 12px; border-radius: 50%; background: #ff5f57;"></span>
+      <span style="width: 12px; height: 12px; border-radius: 50%; background: #febc2e;"></span>
+      <span style="width: 12px; height: 12px; border-radius: 50%; background: #28c840;"></span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 9px; font-size: 13px; font-weight: 600; letter-spacing: .01em; color: #c6d2d5;">
+      <span style="width: 8px; height: 8px; border-radius: 50%; background: {{ dotColor }}; box-shadow: 0 0 10px {{ dotColor }};"></span>
+      Vepeen
+    </div>
+    <div style="justify-self: end; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #56666b; letter-spacing: .02em;">L2TP/IPsec · split tunnel</div>
+  </div>
+
+  <div style="flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 1.08fr; gap: 22px; padding: 24px; position: relative; z-index: 1;">
+
+    <div style="display: flex; flex-direction: column; gap: 16px; min-height: 0;">
+
+      <div style="background: rgba(255,255,255,.025); border: 1px solid rgba(255,255,255,.06); border-radius: 16px; padding: 18px 20px;">
+        <div style="font-size: 11px; letter-spacing: .09em; text-transform: uppercase; color: #4fb3ab; font-weight: 700; margin-bottom: 14px;">Connection Profile</div>
+        <div style="position: relative;">
+          <button onClick="{{ toggleDropdown }}" style="width: 100%; display: flex; align-items: center; justify-content: space-between; background: rgba(0,0,0,.28); border: 1px solid {{ dropBorder }}; border-radius: 11px; padding: 13px 15px; color: {{ profileColor }}; font-size: 14px; font-weight: 500; cursor: pointer; text-align: left;" style-hover="border-color: rgba(45,212,191,.4);">
+            {{ profileLabel }}
+            <span style="color: #6b7c81; font-size: 11px; transform: {{ caretRot }}; transition: transform .18s;">▾</span>
+          </button>
+          <sc-if value="{{ dropdownOpen }}" hint-placeholder-val="{{ false }}">
+            <div style="position: absolute; top: calc(100% + 6px); left: 0; right: 0; background: #16211f; border: 1px solid rgba(255,255,255,.1); border-radius: 12px; padding: 6px; z-index: 20; box-shadow: 0 20px 50px rgba(0,0,0,.5);">
+              <sc-for list="{{ profiles }}" as="p" hint-placeholder-count="3">
+                <button onClick="{{ p.pick }}" style="width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 10px; background: {{ p.bg }}; border: none; border-radius: 8px; padding: 10px 12px; color: #dbe6e8; font-size: 14px; cursor: pointer; text-align: left;" style-hover="background: rgba(255,255,255,.06);">
+                  <span>{{ p.name }}</span>
+                  <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #5a6b70;">{{ p.host }}</span>
+                </button>
+              </sc-for>
+            </div>
+          </sc-if>
+        </div>
+      </div>
+
+      <div style="background: rgba(255,255,255,.025); border: 1px solid rgba(255,255,255,.06); border-radius: 16px; padding: 18px 20px;">
+        <div style="font-size: 11px; letter-spacing: .09em; text-transform: uppercase; color: #4fb3ab; font-weight: 700; margin-bottom: 14px;">Credentials</div>
+        <input placeholder="Username" style="width: 100%; box-sizing: border-box; background: rgba(0,0,0,.28); border: 1px solid rgba(255,255,255,.08); border-radius: 11px; padding: 13px 15px; color: #e8eef0; font-size: 14px; outline: none; margin-bottom: 10px;" style-focus="border-color: rgba(45,212,191,.5);" />
+        <div style="position: relative; margin-bottom: 14px;">
+          <input type="{{ passType }}" placeholder="Password" style="width: 100%; box-sizing: border-box; background: rgba(0,0,0,.28); border: 1px solid rgba(255,255,255,.08); border-radius: 11px; padding: 13px 44px 13px 15px; color: #e8eef0; font-size: 14px; outline: none;" style-focus="border-color: rgba(45,212,191,.5);" />
+          <button onClick="{{ togglePassword }}" style="position: absolute; right: 6px; top: 50%; transform: translateY(-50%); background: transparent; border: none; color: #6b7c81; font-size: 12px; font-family: 'JetBrains Mono', monospace; cursor: pointer; padding: 8px 10px; border-radius: 8px;" style-hover="color: #2dd4bf;">{{ passToggleLabel }}</button>
+        </div>
+        <label onClick="{{ toggleRemember }}" style="display: flex; align-items: center; gap: 11px; cursor: pointer; user-select: none;">
+          <span style="width: 20px; height: 20px; border-radius: 6px; border: 1.5px solid {{ checkBorder }}; background: {{ checkBg }}; display: flex; align-items: center; justify-content: center; color: #06201d; font-size: 12px; font-weight: 800; flex: none;">{{ checkMark }}</span>
+          <span style="font-size: 13.5px; color: #b9c6c9;">Remember credentials</span>
+        </label>
+        <div style="font-size: 12px; color: #63757a; margin-top: 10px; line-height: 1.5;">Leave blank to use credentials saved in Keychain.</div>
+      </div>
+
+      <div style="background: rgba(255,255,255,.025); border: 1px solid rgba(255,255,255,.06); border-radius: 16px; padding: 18px 20px; flex: 1; min-height: 0; display: flex; flex-direction: column;">
+        <div style="display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 6px;">
+          <div style="font-size: 11px; letter-spacing: .09em; text-transform: uppercase; color: #4fb3ab; font-weight: 700;">Split Tunnel Routes</div>
+          <div style="font-size: 11px; color: #63757a;">{{ routeCount }}</div>
+        </div>
+        <div style="font-size: 12px; color: #63757a; margin-bottom: 12px; line-height: 1.5;">Only these destinations route through the VPN.</div>
+        <textarea value="{{ routes }}" onChange="{{ onRoutes }}" spellcheck="false" placeholder="10.10.0.0/16&#10;203.0.113.50&#10;mail.foofle.com" style="flex: 1; width: 100%; box-sizing: border-box; resize: none; background: rgba(0,0,0,.28); border: 1px solid rgba(255,255,255,.08); border-radius: 11px; padding: 13px 15px; color: #cfe0e2; font-size: 13px; font-family: 'JetBrains Mono', monospace; line-height: 1.7; outline: none;" style-focus="border-color: rgba(45,212,191,.5);"></textarea>
+      </div>
+
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 20px; min-height: 0;">
+
+      <div style="background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.015)); border: 1px solid rgba(255,255,255,.07); border-radius: 20px; padding: 26px; display: flex; flex-direction: column; align-items: center; gap: 20px;">
+        <button onClick="{{ toggleConnection }}" style="position: relative; width: 178px; height: 178px; border-radius: 50%; border: none; background: transparent; cursor: pointer; padding: 0;">
+          <span style="position: absolute; inset: 0; border-radius: 50%; border: 2px solid {{ ringColor }}; opacity: .35;"></span>
+          <span style="position: absolute; inset: 14px; border-radius: 50%; background: radial-gradient(circle at 50% 35%, {{ ringGlow }}, transparent 72%); animation: {{ heroAnim }};"></span>
+          <span style="{{ spinnerStyle }}"></span>
+          <span style="position: absolute; inset: 30px; border-radius: 50%; background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(0,0,0,.25)); border: 1px solid rgba(255,255,255,.08); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;">
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: .18em; text-transform: uppercase; color: {{ ringColor }};">{{ heroKicker }}</span>
+            <span style="font-size: 21px; font-weight: 700; color: #eef4f5; letter-spacing: -.01em;">{{ heroLabel }}</span>
+            <span style="font-size: 11px; color: #7d8f94;">{{ heroHint }}</span>
+          </span>
+        </button>
+        <div style="text-align: center;">
+          <div style="font-size: 16px; font-weight: 600; color: #e8eef0;">{{ heroProfile }}</div>
+          <div style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #6b7c81; margin-top: 3px;">{{ statusSub }}</div>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; width: 100%;">
+          <div style="background: rgba(0,0,0,.25); border: 1px solid rgba(255,255,255,.05); border-radius: 12px; padding: 12px; text-align: center;">
+            <div style="font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: #63757a;">Down</div>
+            <div style="font-size: 15px; font-weight: 600; color: #cfe0e2; margin-top: 4px; font-family: 'JetBrains Mono', monospace;">{{ down }}</div>
+          </div>
+          <div style="background: rgba(0,0,0,.25); border: 1px solid rgba(255,255,255,.05); border-radius: 12px; padding: 12px; text-align: center;">
+            <div style="font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: #63757a;">Up</div>
+            <div style="font-size: 15px; font-weight: 600; color: #cfe0e2; margin-top: 4px; font-family: 'JetBrains Mono', monospace;">{{ up }}</div>
+          </div>
+          <div style="background: rgba(0,0,0,.25); border: 1px solid rgba(255,255,255,.05); border-radius: 12px; padding: 12px; text-align: center;">
+            <div style="font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: #63757a;">Ping</div>
+            <div style="font-size: 15px; font-weight: 600; color: #cfe0e2; margin-top: 4px; font-family: 'JetBrains Mono', monospace;">{{ ping }}</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="background: rgba(255,255,255,.025); border: 1px solid rgba(255,255,255,.06); border-radius: 16px; padding: 16px 18px; flex: 1; min-height: 0; display: flex; flex-direction: column;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+          <div style="font-size: 11px; letter-spacing: .09em; text-transform: uppercase; color: #4fb3ab; font-weight: 700;">Activity Log</div>
+          <button onClick="{{ clearLog }}" style="background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.08); border-radius: 8px; padding: 5px 11px; color: #9fb0b4; font-size: 12px; cursor: pointer;" style-hover="color: #e8eef0; border-color: rgba(255,255,255,.16);">Clear</button>
+        </div>
+        <div style="flex: 1; min-height: 0; overflow-y: auto; background: rgba(0,0,0,.28); border: 1px solid rgba(255,255,255,.05); border-radius: 11px; padding: 12px 14px; font-family: 'JetBrains Mono', monospace; font-size: 12px; line-height: 1.85;">
+          <sc-for list="{{ log }}" as="e" hint-placeholder-count="2">
+            <div style="display: flex; gap: 12px;">
+              <span style="color: #4a5a5e; flex: none;">{{ e.t }}</span>
+              <span style="color: {{ e.color }};">{{ e.msg }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div style="height: 60px; flex: none; display: flex; align-items: center; justify-content: space-between; padding: 0 24px; border-top: 1px solid rgba(255,255,255,.05); background: rgba(0,0,0,.18); position: relative; z-index: 2;">
+    <div style="display: flex; align-items: center; gap: 9px; font-size: 12.5px; color: #7d8f94;">
+      <span style="width: 7px; height: 7px; border-radius: 50%; background: {{ dotColor }}; box-shadow: 0 0 8px {{ dotColor }};"></span>
+      {{ footerStatus }}
+    </div>
+    <div style="display: flex; gap: 10px;">
+      <button style="background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.09); border-radius: 10px; padding: 10px 20px; color: #cfe0e2; font-size: 13.5px; font-weight: 600; cursor: pointer;" style-hover="border-color: rgba(255,255,255,.18); background: rgba(255,255,255,.08);">Save Settings</button>
+      <button onClick="{{ toggleConnection }}" style="{{ ctaStyle }}" style-hover="filter: brightness(1.08);">{{ ctaLabel }}</button>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1040,&quot;height&quot;:780}}">
+class Component extends DCLogic {
+  state = {
+    status: 'disconnected',
+    profile: null,
+    dropdownOpen: false,
+    showPassword: false,
+    remember: true,
+    routes: '10.10.0.0/16\n203.0.113.50\nmail.foofle.com',
+    log: [{ t: '10:56:21', msg: 'Ready. Select a profile, then connect.', kind: 'muted' }],
+    down: '—', up: '—', ping: 'not connected',
+  };
+
+  PROFILES = [
+    { name: 'Office Gateway', host: '203.0.113.10' },
+    { name: 'Home Lab', host: 'hl.foofle.com' },
+    { name: 'AWS us-east-1', host: '54.210.0.4' },
+    { name: 'Backup Tunnel', host: '198.51.100.7' },
+  ];
+
+  timers = [];
+
+  componentWillUnmount() { this.timers.forEach(clearInterval); this.timers.forEach(clearTimeout); }
+
+  now() { return new Date().toTimeString().slice(0, 8); }
+  addLog(msg, kind) {
+    this.setState(s => ({ log: [...s.log, { t: this.now(), msg, kind: kind || 'info' }].slice(-40) }));
+  }
+  logColor(kind) {
+    return kind === 'ok' ? '#2dd4bf' : kind === 'warn' ? '#f5b94a' : kind === 'muted' ? '#5a6b70' : '#b9c6c9';
+  }
+
+  toggleConnection = () => {
+    const s = this.state.status;
+    if (s === 'disconnected') this.connect();
+    else this.disconnect(s === 'connected');
+  };
+
+  connect() {
+    if (!this.state.profile) { this.addLog('No profile selected.', 'warn'); return; }
+    this.setState({ status: 'connecting' });
+    this.addLog('Initiating L2TP/IPsec handshake…', 'info');
+    this.timers.push(setTimeout(() => this.addLog('Phase 1 complete · IKE established.', 'info'), 700));
+    this.timers.push(setTimeout(() => {
+      this.setState({ status: 'connected', ping: '24 ms' });
+      this.addLog('Tunnel up · split routes applied.', 'ok');
+      this.startTraffic();
+    }, 1700));
+  }
+
+  disconnect(wasConnected) {
+    this.timers.forEach(clearInterval); this.timers.forEach(clearTimeout); this.timers = [];
+    this.setState({ status: 'disconnected', down: '—', up: '—', ping: 'not connected' });
+    this.addLog(wasConnected ? 'Disconnected.' : 'Connection cancelled.', 'muted');
+  }
+
+  startTraffic() {
+    const rate = () => (Math.random() * 8 + 0.4);
+    this.timers.push(setInterval(() => {
+      this.setState({
+        down: rate().toFixed(1) + ' MB/s',
+        up: (rate() / 4).toFixed(1) + ' MB/s',
+        ping: (20 + Math.round(Math.random() * 12)) + ' ms',
+      });
+    }, 1200));
+  }
+
+  toggleDropdown = () => this.setState(s => ({ dropdownOpen: !s.dropdownOpen }));
+  pickProfile(p) {
+    this.setState({ profile: p, dropdownOpen: false });
+    this.addLog('Profile selected · ' + p.name, 'info');
+  }
+  togglePassword = () => this.setState(s => ({ showPassword: !s.showPassword }));
+  toggleRemember = () => this.setState(s => ({ remember: !s.remember }));
+  onRoutes = (e) => this.setState({ routes: e.target.value });
+  clearLog = () => this.setState({ log: [] });
+
+  renderVals() {
+    const st = this.state.status;
+    const connected = st === 'connected', connecting = st === 'connecting';
+    const dotColor = connected ? '#2dd4bf' : connecting ? '#f5b94a' : '#5a6b70';
+    const ringColor = connected ? '#2dd4bf' : connecting ? '#f5b94a' : '#4a5a5e';
+    const routeLines = this.state.routes.split('\n').filter(l => l.trim() && !l.trim().startsWith('#')).length;
+
+    return {
+      dotColor, ringColor,
+      ringGlow: connected ? 'rgba(45,212,191,.5)' : connecting ? 'rgba(245,185,74,.35)' : 'rgba(90,110,116,.18)',
+      heroAnim: connected ? 'vp-breathe 3s ease-in-out infinite' : 'none',
+      spinnerStyle: connecting
+        ? "position:absolute; inset:0; border-radius:50%; border:2px solid transparent; border-top-color:#f5b94a; animation: vp-spin .9s linear infinite;"
+        : "display:none;",
+      heroKicker: connected ? 'Secure' : connecting ? 'Working' : 'Tap to',
+      heroLabel: connected ? 'Connected' : connecting ? 'Connecting' : 'Connect',
+      heroHint: connected ? 'split tunnel' : connecting ? 'please wait' : 'not protected',
+      heroProfile: this.state.profile ? this.state.profile.name : 'No profile selected',
+      statusSub: this.state.profile ? 'L2TP/IPsec · ' + this.state.profile.host : 'choose a profile to begin',
+
+      profiles: this.PROFILES.map(p => ({
+        ...p,
+        pick: () => this.pickProfile(p),
+        bg: this.state.profile && this.state.profile.name === p.name ? 'rgba(45,212,191,.12)' : 'transparent',
+      })),
+      profileLabel: this.state.profile ? this.state.profile.name : 'Select VPN profile…',
+      profileColor: this.state.profile ? '#e8eef0' : '#7d8f94',
+      dropdownOpen: this.state.dropdownOpen,
+      dropBorder: this.state.dropdownOpen ? 'rgba(45,212,191,.45)' : 'rgba(255,255,255,.08)',
+      caretRot: this.state.dropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+      toggleDropdown: this.toggleDropdown,
+
+      passType: this.state.showPassword ? 'text' : 'password',
+      passToggleLabel: this.state.showPassword ? 'hide' : 'show',
+      togglePassword: this.togglePassword,
+      checkBg: this.state.remember ? '#2dd4bf' : 'transparent',
+      checkBorder: this.state.remember ? '#2dd4bf' : 'rgba(255,255,255,.22)',
+      checkMark: this.state.remember ? '✓' : '',
+      toggleRemember: this.toggleRemember,
+
+      routes: this.state.routes,
+      onRoutes: this.onRoutes,
+      routeCount: routeLines + (routeLines === 1 ? ' route' : ' routes'),
+
+      log: this.state.log.map(e => ({ ...e, color: this.logColor(e.kind) })),
+      clearLog: this.clearLog,
+
+      down: this.state.down, up: this.state.up, ping: this.state.ping,
+      toggleConnection: this.toggleConnection,
+
+      footerStatus: connected ? 'Connected · traffic flowing' : connecting ? 'Negotiating tunnel…' : 'Disconnected · settings loaded',
+      ctaLabel: connected ? 'Disconnect' : connecting ? 'Cancel' : 'Connect',
+      ctaStyle: (connected
+        ? "background: rgba(255,95,87,.14); border: 1px solid rgba(255,95,87,.4); color: #ff8a84;"
+        : connecting
+        ? "background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12); color: #cfe0e2;"
+        : "background: linear-gradient(180deg, #34e0cc, #16b5a2); border: none; color: #05201d;")
+        + " border-radius: 10px; padding: 10px 24px; font-size: 13.5px; font-weight: 700; cursor: pointer;",
+    };
+  }
+}
+</script>
+</body>
+</html>

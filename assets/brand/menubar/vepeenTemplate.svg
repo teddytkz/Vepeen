@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <title>Vepeen</title>
+  <!-- macOS template image: pure black + alpha only. The system tints it
+       (teal connected / gray disconnected / amber connecting). -->
+  <g fill="none" stroke="#000" stroke-width="11" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M57,64 L100,93" opacity=".5"/>
+    <path d="M24,64 H57"/>
+    <path d="M57,64 L100,35"/>
+  </g>
+  <circle cx="100" cy="93" r="6.5" fill="#000" opacity=".5"/>
+  <circle cx="100" cy="35" r="6.5" fill="#000"/>
+</svg>

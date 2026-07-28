@@ -9,6 +9,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"io"
 	"os/exec"
 )
@@ -22,13 +23,29 @@ const (
 	keychainKeyAcct = "store-key"
 )
 
+// errNoKey reports that no key item exists yet (as opposed to one existing but
+// being unreadable — denied ACL, locked keychain, transient `security` failure).
+var errNoKey = errors.New("no store key in keychain")
+
 // storeKey returns the 32-byte AES key, creating and persisting it on first use.
+//
+// A read failure must NEVER fall through to minting a new key: doing so
+// overwrites the existing key and permanently orphans vepeen.bin, which then
+// silently decrypts to defaults and loses saved routes/credentials. Only a
+// confirmed-absent item (exit status 44) may create one.
 func storeKey() ([]byte, error) {
-	if b64, err := securityFind(keychainService, keychainKeyAcct); err == nil {
-		if key, derr := base64.StdEncoding.DecodeString(b64); derr == nil && len(key) == 32 {
-			return key, nil
+	b64, err := securityFind(keychainService, keychainKeyAcct)
+	switch {
+	case err == nil:
+		key, derr := base64.StdEncoding.DecodeString(b64)
+		if derr != nil || len(key) != 32 {
+			return nil, errors.New("store key in keychain is malformed")
 		}
+		return key, nil
+	case !errors.Is(err, errNoKey):
+		return nil, fmt.Errorf("read store key: %w", err)
 	}
+
 	key := make([]byte, 32)
 	if _, err := io.ReadFull(rand.Reader, key); err != nil {
 		return nil, err
@@ -85,20 +102,29 @@ func newGCM(key []byte) (cipher.AEAD, error) {
 	return cipher.NewGCM(block)
 }
 
-// securityFind returns the password for service/account, or an error if absent.
+// errItemNotFound is `security`'s exit status for "the item does not exist".
+const securityNotFoundStatus = 44
+
+// securityFind returns the password for service/account. A confirmed-absent item
+// yields errNoKey; every other failure is returned as-is so callers can tell
+// "nothing stored yet" apart from "stored but unreadable".
 func securityFind(service, account string) (string, error) {
 	out, err := exec.Command("security", "find-generic-password",
 		"-s", service, "-a", account, "-w").Output()
 	if err != nil {
+		var ee *exec.ExitError
+		if errors.As(err, &ee) && ee.ExitCode() == securityNotFoundStatus {
+			return "", errNoKey
+		}
 		return "", err
 	}
 	return string(bytes.TrimRight(out, "\n")), nil
 }
 
-// securitySet upserts the password (delete-then-add; add alone fails if it exists).
+// securitySet adds the password. -U updates an existing item in place, so no
+// delete-first is needed — and deleting first would destroy the only copy of the
+// key if the subsequent add failed.
 func securitySet(service, account, value string) error {
-	_ = exec.Command("security", "delete-generic-password",
-		"-s", service, "-a", account).Run()
 	return exec.Command("security", "add-generic-password",
 		"-s", service, "-a", account, "-w", value, "-U").Run()
 }

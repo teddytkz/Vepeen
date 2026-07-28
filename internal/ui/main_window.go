@@ -1165,7 +1165,12 @@ func (c *controller) validateConnect() (string, fyne.Focusable) {
 
 func (c *controller) persistQuiet(req vpn.ConnectRequest) {
 	prefixes, _ := route.ParseLines(req.RoutesText)
-	cur, _ := config.LoadStored()
+	cur, err := config.LoadStored()
+	if err != nil {
+		// Store present but unreadable: writing now would drop the credentials
+		// we could not decrypt. Leave it alone.
+		return
+	}
 	cur.SelectedProfile = req.Name
 	cur.Routes = prefixes
 	_ = config.SaveStored(cur)

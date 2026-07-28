@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="Vepeen">
+  <title>Vepeen</title>
+  <!-- Single-colour template mark: no badge. The "direct" branch is differentiated
+       by opacity, never by hue, so the system can tint this as a template image. -->
+  <g fill="none" stroke="currentColor" stroke-width="11" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M57,64 L100,93" opacity=".5"/>
+    <path d="M24,64 H57"/>
+    <path d="M57,64 L100,35"/>
+  </g>
+  <circle cx="100" cy="93" r="6.5" fill="currentColor" opacity=".5"/>
+  <circle cx="100" cy="35" r="6.5" fill="currentColor"/>
+</svg>

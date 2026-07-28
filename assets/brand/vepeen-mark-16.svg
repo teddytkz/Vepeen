@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="Vepeen">
+  <title>Vepeen</title>
+  <!-- 16px tier: stem + upper (teal) branch + one dot only. A 2-branch mark is
+       mud at 16px, so the lower branch is dropped entirely (handoff, "Size
+       simplification"). Stroke weight raised to 13/128 so the branch reads. -->
+  <g fill="none" stroke-width="13" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M24,64 H57"     stroke="#CFE0E2"/>
+    <path d="M57,64 L100,35" stroke="#2DD4BF"/>
+  </g>
+  <circle cx="100" cy="35" r="7.5" fill="#2DD4BF"/>
+</svg>
