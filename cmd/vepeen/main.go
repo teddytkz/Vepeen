@@ -44,9 +44,18 @@ func main() {
 	// Listen for show signals from a second instance launch (tray-hidden window).
 	ui.ListenForShowSignal(w)
 
-	// ShowCentered centers the window (full monitor) and shows it before the
-	// first frame, eliminating the startup blink. a.Run() only starts the loop.
-	ui.ShowCentered(w)
+	// When run on startup, start hidden to tray. CenterOnScreen pre-registers
+	// centering for the first real Show(); Hide() before window creation is a
+	// safe no-op (viewport is nil), so the window appears centered on later
+	// Show() calls instead of at a stray default position.
+	if ui.IsRunOnStartup() {
+		w.CenterOnScreen()
+		w.Hide()
+	} else {
+		// ShowCentered centers the window (full monitor) and shows it before the
+		// first frame, eliminating the startup blink. a.Run() only starts the loop.
+		ui.ShowCentered(w)
+	}
 	a.Run()
 }
 

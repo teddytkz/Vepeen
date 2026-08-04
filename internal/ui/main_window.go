@@ -100,8 +100,19 @@ func NewMainWindow(a fyne.App) (fyne.Window, func()) {
 		}()
 	}
 
-	w.SetMainMenu(fyne.NewMainMenu(
-		fyne.NewMenu("Menu",
+	// Run on Startup is a checkable item. State lives in the HKCU Run key
+	// (single source of truth), so read it at build time and toggle it on click.
+	// Fyne caches whether a menu contains checkmarks when the menu is built
+	// (containsCheck in widget/menu.go), so the checkmark would overlap the
+	// label after toggling. Rebuilding the menu re-runs that layout pass; the
+	// menu is already dismissed when the action fires, so the rebuild is not
+	// visible to the user.
+	runOnStartup := fyne.NewMenuItem("Run on Startup", nil)
+	optionsItem := fyne.NewMenuItem("Options", nil)
+	rebuildMenu := func() {
+		runOnStartup.Checked = IsRunOnStartup()
+		optionsItem.ChildMenu = fyne.NewMenu("Options",
+			runOnStartup,
 			fyne.NewMenuItem("Create Desktop Shortcut", func() {
 				if err := CreateDesktopShortcut(); err != nil {
 					ctrl.appendLog("Failed to create desktop shortcut: " + err.Error())
@@ -109,9 +120,25 @@ func NewMainWindow(a fyne.App) (fyne.Window, func()) {
 					ctrl.appendLog("Desktop shortcut created.")
 				}
 			}),
-			fyne.NewMenuItem("Quit", func() { disconnectAndQuit() }),
-		),
-	))
+		)
+		w.SetMainMenu(fyne.NewMainMenu(
+			fyne.NewMenu("Menu",
+				optionsItem,
+				fyne.NewMenuItem("Quit", func() { disconnectAndQuit() }),
+			),
+		))
+	}
+	runOnStartup.Action = func() {
+		enabled := !IsRunOnStartup()
+		if err := SetRunOnStartup(enabled); err != nil {
+			ctrl.appendLog("Failed to update run on startup: " + err.Error())
+			return
+		}
+		runOnStartup.Checked = enabled
+		ctrl.appendLog("Run on startup " + map[bool]string{true: "enabled", false: "disabled"}[enabled] + ".")
+		rebuildMenu()
+	}
+	rebuildMenu()
 
 	return w, disconnectAndQuit
 }
@@ -1173,6 +1200,10 @@ func (c *controller) persistQuiet(req vpn.ConnectRequest) {
 	}
 	cur.SelectedProfile = req.Name
 	cur.Routes = prefixes
+	// Auto-save the remaining settings at connect time so the user does not
+	// have to press Save Settings manually (the button still works too).
+	cur.RememberCredentials = c.rememberCheck.Checked
+	cur.RouteAllTraffic = c.routeAllCheck.Checked
 	_ = config.SaveStored(cur)
 }
 
