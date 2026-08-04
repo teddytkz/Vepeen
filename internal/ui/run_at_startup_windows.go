@@ -11,9 +11,11 @@ import (
 // runKey is the HKCU Run key where autostart entries live.
 const runKey = `Software\Microsoft\Windows\CurrentVersion\Run`
 
-// runValueName is the value name under the Run key. The quoted executable
-// path is the value data. Quoting matters: without it, paths with spaces
-// are misparsed by ShellExecute.
+// runValueName is the value name under the Run key. The value data is the
+// quoted executable path plus the --autostart flag. Quoting matters: without
+// it, paths with spaces are misparsed by ShellExecute. The flag lets the app
+// distinguish an autostart launch (hide to tray) from a manual double-click
+// (show the window).
 const runValueName = "Vepeen"
 
 // IsRunOnStartup reports whether the Vepeen autostart entry exists in the
@@ -42,7 +44,7 @@ func SetRunOnStartup(enabled bool) error {
 	}
 	defer k.Close()
 	if enabled {
-		return k.SetStringValue(runValueName, `"`+exe+`"`)
+		return k.SetStringValue(runValueName, `"`+exe+`" --autostart`)
 	}
 	err = k.DeleteValue(runValueName)
 	if err == registry.ErrNotExist {
