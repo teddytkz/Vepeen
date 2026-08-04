@@ -3,6 +3,8 @@
 package ui
 
 import (
+	"time"
+
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/theme"
@@ -27,6 +29,22 @@ func SetupTray(a fyne.App, w fyne.Window, onQuit func()) {
 		icon = theme.ComputerIcon()
 	}
 	desk.SetSystemTrayIcon(icon)
+
+	// Tooltip shown on hover (Windows only). Retry until the tray is ready,
+	// since systray.SetTooltip fails with ErrTrayNotReadyYet before init.
+	// ponytail: Fyne has no tray-tooltip API, so we drive fyne.io/systray
+	// directly. When Fyne exposes SetSystemTrayTooltip, drop this and the
+	// two tray_tooltip_*.go files.
+	title := a.Metadata().Name
+	if title == "" {
+		title = "Vepeen"
+	}
+	go func() {
+		for i := 0; i < 10; i++ {
+			setTrayTooltip(title)
+			time.Sleep(100 * time.Millisecond)
+		}
+	}()
 
 	// Build right-click context menu.
 	menu := fyne.NewMenu("Vepeen",
