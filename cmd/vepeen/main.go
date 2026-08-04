@@ -34,7 +34,7 @@ func main() {
 
 	// Unique app ID helps Fyne preferences; secrets use Windows Credential Manager separately.
 	a := app.NewWithID("com.vepeen.app")
-	a.SetIcon(ui.VepeenIcon)
+	a.SetIcon(ui.PenelopeIcon)
 	a.Settings().SetTheme(ui.NewTheme())
 	w, onQuit := ui.NewMainWindow(a)
 

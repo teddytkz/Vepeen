@@ -4,13 +4,13 @@ $env:CGO_ENABLED = "1"
 # --- Windows resources: icon + Per-Monitor v2 DPI manifest -------------------
 # Resources are embedded as compiled .syso files so the linker merges an
 # RT_GROUP_ICON and RT_MANIFEST into bin/vepeen.exe:
-#   - Icon:     winres/vepeen.png  → all standard sizes (256…16 px)
+#   - Icon:     winres/penelope.png  → all standard sizes (256…16 px)
 #   - Manifest: dpiAwareness = "per monitor v2", uiAccess = false
 #
 # One-time tool install:
 #   go install github.com/tc-hib/go-winres@latest
 #
-# To regenerate after changing winres/winres.json or winres/vepeen.png:
+# To regenerate after changing winres/winres.json or winres/penelope.png:
 #   go-winres make --in winres/winres.json --out cmd/vepeen/rsrc
 # This produces cmd/vepeen/rsrc_windows_amd64.syso (and _386.syso), which
 # go build picks up automatically — no extra step for a normal build.
