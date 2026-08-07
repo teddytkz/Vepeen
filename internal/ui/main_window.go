@@ -797,6 +797,10 @@ func (c *controller) syncVisualState(primary, detail string) {
 		if detail != "" {
 			txt = primary + " · " + detail
 		}
+		// Limit footer text to prevent layout breaking on long error messages
+		if len(txt) > 80 {
+			txt = txt[:80] + "…"
+		}
 		c.footerText.Text = txt
 		c.footerText.Refresh()
 	}
