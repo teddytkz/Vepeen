@@ -58,8 +58,9 @@ func statTile(caption string, value *canvas.Text) fyne.CanvasObject {
 }
 
 // heroRing is the focal circular connect/disconnect control. It stacks canvas
-// circles (outer ring, glow, center disc) and animates a connecting spinner and
-// a connected "breathe" pulse. Tapping calls onTap.
+// circles (outer ring, glow, center disc) and pulses while connecting.
+// Connected/disconnected render static: any perpetual animation marks the
+// canvas dirty every frame, forcing a full-window repaint at display rate.
 type heroRing struct {
 	widget.BaseWidget
 
@@ -68,7 +69,6 @@ type heroRing struct {
 	ring   *canvas.Circle // outer state ring
 	glow   *canvas.Circle // inner state-colored glow
 	disc   *canvas.Circle // dark center disc
-	spin   *canvas.Circle // spinner arc proxy (opacity pulse fallback)
 	kicker *canvas.Text
 	label  *canvas.Text
 	hint   *canvas.Text
@@ -84,7 +84,6 @@ func newHeroRing(onTap func()) *heroRing {
 	h.ring = &canvas.Circle{StrokeColor: withAlpha(ringIdle, 0x66), StrokeWidth: 2, FillColor: color.Transparent}
 	h.glow = &canvas.Circle{FillColor: withAlpha(ringIdle, 0x33)}
 	h.disc = &canvas.Circle{FillColor: color.NRGBA{R: 0x0b, G: 0x13, B: 0x15, A: 0xff}}
-	h.spin = &canvas.Circle{StrokeColor: color.Transparent, StrokeWidth: 3, FillColor: color.Transparent}
 
 	h.kicker = canvas.NewText("TAP TO", ringIdle)
 	h.kicker.TextSize = 10
@@ -138,29 +137,34 @@ func (h *heroRing) SetState(state string) {
 	}
 
 	h.stopAnim()
-	switch state {
-	case "connecting":
-		h.startPulse(0.6, warnColor, 900) // fast amber pulse ≈ spinner
-	case "connected":
-		h.startPulse(0.35, accentColor, 3000) // slow teal breathe
+	if state == "connecting" {
+		h.startPulse(warnColor)
 	}
 
 	h.Refresh()
 }
 
-// startPulse animates the glow alpha between base and a brighter peak.
-func (h *heroRing) startPulse(basePeak float32, col color.NRGBA, ms int) {
-	h.anim = fyne.NewAnimation(time.Duration(ms)*time.Millisecond, func(f float32) {
-		// triangle wave 0→1→0 for a smooth in/out
-		p := f * 2
-		if p > 1 {
-			p = 2 - p
+// startPulse ramps the glow alpha up and back down (AutoReverse) so each cycle
+// is a 0→1→0 triangle.
+// ponytail: throttled to ~10fps. Fyne has no dirty-rect repaint — any
+// canvas.Refresh redraws the whole window — so every animated frame costs a
+// full redraw. Connecting is transient, which bounds that cost; "connected"
+// deliberately stays static for the same reason. Raise to 30fps only if the
+// pulse reads as choppy.
+func (h *heroRing) startPulse(col color.NRGBA) {
+	var last time.Time
+	const minFrame = 100 * time.Millisecond
+	h.anim = fyne.NewAnimation(600*time.Millisecond, func(f float32) {
+		now := time.Now()
+		if !last.IsZero() && now.Sub(last) < minFrame {
+			return
 		}
-		a := basePeak + (1-basePeak)*p*0.5
-		h.glow.FillColor = withAlpha(col, uint8(a*0x66))
+		last = now
+		h.glow.FillColor = withAlpha(col, uint8((0.2+0.8*f)*0x66))
 		canvas.Refresh(h.glow)
 	})
 	h.anim.RepeatCount = fyne.AnimationRepeatForever
+	h.anim.AutoReverse = true
 	h.anim.Curve = fyne.AnimationEaseInOut
 	h.anim.Start()
 }
@@ -200,7 +204,6 @@ func (r *heroRingRenderer) Layout(size fyne.Size) {
 		o.Resize(fyne.NewSize(side-2*inset, side-2*inset))
 	}
 	place(r.h.ring, 0)
-	place(r.h.spin, 0)
 	place(r.h.glow, 14)
 	place(r.h.disc, 30)
 
@@ -226,7 +229,7 @@ func (r *heroRingRenderer) Refresh() {
 
 func (r *heroRingRenderer) Objects() []fyne.CanvasObject {
 	return []fyne.CanvasObject{
-		r.h.glow, r.h.disc, r.h.ring, r.h.spin,
+		r.h.glow, r.h.disc, r.h.ring,
 		r.h.kicker, r.h.label, r.h.hint,
 	}
 }

@@ -556,15 +556,16 @@ func formatRate(bytesPerSec float64) string {
 	return fmt.Sprintf("%.0f Kbps", bitsPerSec/1e3)
 }
 
-// startTraffic launches a ~1/sec ticker that samples live download/upload rates
+// startTraffic launches a ~2/sec ticker that samples live download/upload rates
 // for the named connection. Any prior ticker is stopped first.
+// ponytail: reduced from 1s to 2s interval to lower GPU load.
 func (c *controller) startTraffic(name string) {
 	c.stopTraffic()
 	c.trafficName = name
 	stop := make(chan struct{})
 	c.trafficStop = stop
 	go func() {
-		ticker := time.NewTicker(time.Second)
+		ticker := time.NewTicker(2 * time.Second)
 		defer ticker.Stop()
 		var prevRx, prevTx uint64
 		var prevAt time.Time
@@ -606,13 +607,18 @@ func (c *controller) startTraffic(name string) {
 						}
 					}
 				}
+				// Only update UI if values changed to avoid unnecessary GPU redraws
 				if setRates {
 					fyne.Do(func() {
 						if c.state != vpn.StatusConnected {
 							return
 						}
-						c.setStat(c.statDown, dl)
-						c.setStat(c.statUp, ul)
+						if c.statDown.Text != dl {
+							c.setStat(c.statDown, dl)
+						}
+						if c.statUp.Text != ul {
+							c.setStat(c.statUp, ul)
+						}
 					})
 				}
 				// Release before ActiveConnections (slow reverse DNS must not block rate ticks).
@@ -690,14 +696,15 @@ func (c *controller) gatewayHost() string {
 	return strings.TrimSpace(p.ServerAddress)
 }
 
-// startPingTicker launches a ~2s ticker that updates the gateway ping status.
+// startPingTicker launches a ~4s ticker that updates the gateway ping status.
 // Any prior ticker is stopped first.
+// ponytail: reduced from 2s to 4s interval to lower GPU load.
 func (c *controller) startPingTicker() {
 	c.stopPingTicker()
 	stop := make(chan struct{})
 	c.pingStop = stop
 	go func() {
-		ticker := time.NewTicker(2 * time.Second)
+		ticker := time.NewTicker(4 * time.Second)
 		defer ticker.Stop()
 		for {
 			select {
@@ -706,7 +713,10 @@ func (c *controller) startPingTicker() {
 			case <-ticker.C:
 				result := pingGateway(c.gatewayHost())
 				fyne.Do(func() {
-					c.setStat(c.statPing, result)
+					// Only update if value changed to avoid unnecessary GPU redraws
+					if c.statPing != nil && c.statPing.Text != result {
+						c.setStat(c.statPing, result)
+					}
 				})
 			}
 		}
