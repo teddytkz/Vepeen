@@ -153,6 +153,61 @@ var lookupHost = func(ctx context.Context, host string) ([]string, error) {
 	return net.DefaultResolver.LookupHost(ctx, host)
 }
 
+// SplitEntries partitions already-normalized entries into static IPv4 CIDR
+// prefixes and domain names (lowercased). Order is preserved within each group.
+// A domain name is anything that is not a valid IP/CIDR prefix.
+func SplitEntries(entries []string) (static, domains []string) {
+	for _, e := range entries {
+		if norm, err := normalizePrefix(e); err == nil {
+			static = append(static, norm)
+			continue
+		}
+		domains = append(domains, strings.ToLower(strings.TrimSpace(e)))
+	}
+	return static, domains
+}
+
+// ResolveDomains expands domain entries to their IPv4 addresses (as /32
+// prefixes) and returns the deduplicated prefixes plus human-readable warnings
+// for any domain that could not be resolved. Unlike ResolveRoutes, it never
+// returns a hard error: it is meant to run AFTER the VPN dials, where a single
+// unresolvable domain must not tear down a working tunnel.
+func ResolveDomains(ctx context.Context, domains []string) (prefixes []string, warnings []string) {
+	out := make([]string, 0, len(domains))
+	seen := make(map[string]struct{})
+	add := func(p string) {
+		if _, ok := seen[p]; ok {
+			return
+		}
+		seen[p] = struct{}{}
+		out = append(out, p)
+	}
+	for _, e := range domains {
+		domain := strings.ToLower(strings.TrimSpace(e))
+		if domain == "" {
+			continue
+		}
+		addrs, err := lookupHost(ctx, domain)
+		if err != nil {
+			warnings = append(warnings, fmt.Sprintf("Could not resolve domain %q: %v. Its routes were skipped.", domain, err))
+			continue
+		}
+		resolved := 0
+		for _, a := range addrs {
+			ip := net.ParseIP(a)
+			if ip == nil || ip.To4() == nil {
+				continue // skip IPv6 for v1
+			}
+			add(ip.To4().String() + "/32")
+			resolved++
+		}
+		if resolved == 0 {
+			warnings = append(warnings, fmt.Sprintf("Domain %q has no IPv4 address. Its routes were skipped.", domain))
+		}
+	}
+	return out, warnings
+}
+
 // ResolveRoutes expands domain entries to their IPv4 addresses (as /32
 // prefixes) and returns a deduplicated list of IPv4 CIDR prefixes. IP/CIDR
 // entries pass through unchanged. A domain that fails to resolve, or resolves

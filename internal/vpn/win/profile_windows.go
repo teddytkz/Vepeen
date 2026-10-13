@@ -44,11 +44,14 @@ func ListProfiles() ([]shared.ProfileSummary, error) {
 	return res, nil
 }
 
-// EnforceSplitTunnel removes a default (0.0.0.0/0) route on the VPN interface if present,
-// guaranteeing split-tunnel behavior even when the server pushes a default route.
-// It is best-effort: errors are returned but should not abort the connect flow.
-func EnforceSplitTunnel(name string) (string, error) {
-	script := enforceSplitTunnelScript(name)
+// EnforceSplitTunnel makes the live VPN connection a split tunnel: it removes a
+// server-pushed default route (0.0.0.0/0) on the VPN interface if present, then
+// adds each desired prefix to the live interface. Profile routes added via
+// Add-VpnConnectionRoute only apply on the NEXT connect, so this live step is
+// what makes the current session's split routes active immediately. It is
+// best-effort: errors are returned but should not abort the connect flow.
+func EnforceSplitTunnel(name string, prefixes []string) (string, error) {
+	script := enforceSplitTunnelScript(name, prefixes)
 	out, err := runPowerShell(script)
 	if err != nil {
 		return shared.SanitizeOutput(strings.TrimSpace(out)), err
@@ -56,10 +59,19 @@ func EnforceSplitTunnel(name string) (string, error) {
 	return strings.TrimSpace(out), nil
 }
 
-// enforceSplitTunnelScript builds the PowerShell that removes a server-pushed
-// default route (0.0.0.0/0) using the real VPN interface resolved via
-// Get-VpnConnection (alias/index), falling back to the profile name.
-func enforceSplitTunnelScript(name string) string {
+// enforceSplitTunnelScript builds the PowerShell that resolves the real VPN
+// interface via Get-VpnConnection (alias/index, falling back to the profile
+// name), removes a server-pushed default route (0.0.0.0/0), and live-adds each
+// prefix with New-NetRoute in the ActiveStore (so it is not persisted and does
+// not duplicate the profile routes; it disappears when the adapter goes down).
+func enforceSplitTunnelScript(name string, prefixes []string) string {
+	var add strings.Builder
+	for _, p := range prefixes {
+		fmt.Fprintf(&add,
+			"    New-NetRoute -InterfaceIndex $ifIndex -DestinationPrefix %s -PolicyStore ActiveStore -ErrorAction SilentlyContinue\n",
+			psQuote(p),
+		)
+	}
 	return fmt.Sprintf(`$ErrorActionPreference='Stop'
 $name = %s
 try {
@@ -74,7 +86,7 @@ try {
     } else {
       'no-default'
     }
-  } else {
+%s  } else {
     $r = Get-NetRoute -InterfaceAlias $ifAlias -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue
     if ($r) {
       Remove-NetRoute -InterfaceAlias $ifAlias -DestinationPrefix '0.0.0.0/0' -Confirm:$false -ErrorAction SilentlyContinue
@@ -85,7 +97,7 @@ try {
   }
 } catch {
   'enforce-error'
-}`, psQuote(name))
+}`, psQuote(name), add.String())
 }
 
 // ProfileDiagnostics returns a short status line: SplitTunneling on/off and route count.

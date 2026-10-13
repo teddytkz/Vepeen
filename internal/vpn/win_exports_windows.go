@@ -48,10 +48,11 @@ func DisableSplitTunneling(name string) error {
 	return win.DisableSplitTunneling(name)
 }
 
-// EnforceSplitTunnel removes a server-pushed default route if present. On Windows
-// routes are attached to the profile pre-dial, so prefixes are unused here.
+// EnforceSplitTunnel removes a server-pushed default route if present and
+// live-adds the prefixes to the connected VPN interface so the current session's
+// split routes take effect immediately (profile routes only apply next connect).
 func EnforceSplitTunnel(name string, prefixes []string) (string, error) {
-	return win.EnforceSplitTunnel(name)
+	return win.EnforceSplitTunnel(name, prefixes)
 }
 
 // ListProfiles enumerates all Windows VPN connections.

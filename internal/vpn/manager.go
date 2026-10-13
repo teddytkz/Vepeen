@@ -17,6 +17,7 @@ const (
 	PhaseNATCheck          Phase = "nat_check"
 	PhaseSyncRoutes        Phase = "sync_routes"
 	PhaseDial              Phase = "dial"
+	PhaseResolveRoutes     Phase = "resolve_routes"
 	PhaseSplitEnforce      Phase = "split_enforce"
 	PhaseDisconnectOthers  Phase = "disconnect_others"
 	PhaseSplitTunnelEnsure Phase = "split_tunnel_ensure"
@@ -54,6 +55,10 @@ type Manager struct {
 	ensureSplitTunnelingFn func(string) error
 	// disableSplitTunnelingFn disables split tunneling on the profile; overridable for tests.
 	disableSplitTunnelingFn func(string) error
+	// resolveDomainsFn resolves domain route entries post-dial; overridable for tests.
+	resolveDomainsFn func(context.Context, []string) ([]string, []string)
+	// enforceSplitTunnelFn applies split tunnel to the live connection; overridable for tests.
+	enforceSplitTunnelFn func(string, []string) (string, error)
 }
 
 // NewManager returns a VPN manager.
@@ -64,6 +69,8 @@ func NewManager() *Manager {
 		natCheckFn:              EnsureNATRegistry,
 		ensureSplitTunnelingFn:  EnsureSplitTunneling,
 		disableSplitTunnelingFn: DisableSplitTunneling,
+		resolveDomainsFn:        route.ResolveDomains,
+		enforceSplitTunnelFn:    EnforceSplitTunnel,
 	}
 }
 
@@ -106,18 +113,14 @@ func (m *Manager) ConnectFull(ctx context.Context, req ConnectRequest, progress 
 			return nil, shared.NewUserError("validation", "Cannot connect", err.Error())
 		}
 	}
-	// Windows VPN routes require IP prefixes, so resolve any domain entries
-	// to their IPv4 addresses before syncing.
-	resolveCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
-	defer cancel()
-	resolved, rerr := route.ResolveRoutes(resolveCtx, prefixes)
-	if rerr != nil {
-		return nil, shared.NewUserError("validation", "Cannot connect", rerr.Error())
-	}
-	prefixes = resolved
 	if len(prefixes) == 0 && !req.RouteAllTraffic {
 		return nil, shared.NewUserError("validation", "Cannot connect", "Enter at least one destination IP, CIDR, or domain name for split tunnel (e.g. 10.0.0.0/24 or example.com).")
 	}
+
+	// Split entries into static IP/CIDR prefixes (safe to sync pre-dial) and
+	// domain names (which must be resolved AFTER the tunnel is up, so the VPN's
+	// own DNS can answer split-DNS lookups).
+	static, domains := route.SplitEntries(prefixes)
 
 	notify(PhaseDisconnectOthers)
 	if _, derr := DisconnectAllExcept(name); derr != nil {
@@ -130,18 +133,23 @@ func (m *Manager) ConnectFull(ctx context.Context, req ConnectRequest, progress 
 			log.Printf("ConnectFull: failed to disable split tunnel: %s Connection will continue; all-traffic routing may not apply.", shared.SanitizeOutput(err.Error()))
 			warnings = append(warnings, "Failed to disable split tunnel: "+shared.SanitizeOutput(err.Error())+". All-traffic routing may not apply.")
 		}
-	} else if !req.RouteAllTraffic {
+	} else {
 		notify(PhaseSplitTunnelEnsure)
 		if err := m.ensureSplitTunnelingFn(name); err != nil {
 			log.Printf("ConnectFull: failed to enable split tunnel: %s Connection will continue; routes may not be applied.", shared.SanitizeOutput(err.Error()))
 			warnings = append(warnings, "Failed to enable split tunnel: "+shared.SanitizeOutput(err.Error())+". Connection will continue; split tunnel routes may not be applied.")
 		}
 
-		notify(PhaseSyncRoutes)
-		if err := m.syncRoutesFn(name, prefixes); err != nil {
-			// Best-effort: do not abort connect for a transient route-sync error.
-			log.Printf("ConnectFull: route sync skipped: %s Connection will continue; split tunnel routes may need to be re-saved.", shared.SanitizeOutput(err.Error()))
-			warnings = append(warnings, "Route sync skipped: "+shared.SanitizeOutput(err.Error())+". Connection will continue; split tunnel routes may need to be re-saved.")
+		// Sync static IP/CIDR routes pre-dial so they apply the moment the
+		// tunnel comes up (and any DNS server inside those subnets is reachable
+		// for the post-dial domain resolution below).
+		if len(static) > 0 {
+			notify(PhaseSyncRoutes)
+			if err := m.syncRoutesFn(name, static); err != nil {
+				// Best-effort: do not abort connect for a transient route-sync error.
+				log.Printf("ConnectFull: route sync skipped: %s Connection will continue; split tunnel routes may need to be re-saved.", shared.SanitizeOutput(err.Error()))
+				warnings = append(warnings, "Route sync skipped: "+shared.SanitizeOutput(err.Error())+". Connection will continue; split tunnel routes may need to be re-saved.")
+			}
 		}
 		if ctx.Err() != nil {
 			return nil, shared.NewUserError("canceled", "Cancelled", "Connection cancelled.")
@@ -156,9 +164,34 @@ func (m *Manager) ConnectFull(ctx context.Context, req ConnectRequest, progress 
 		return nil, shared.NewUserError("canceled", "Cancelled", "Connection cancelled.")
 	}
 
+	allPrefixes := static
 	if !req.RouteAllTraffic {
+		// The tunnel is up: resolve domain entries now so the VPN's own DNS can
+		// answer split-DNS lookups. A domain that still fails is a warning, not
+		// a fatal error — the working tunnel is kept.
+		if len(domains) > 0 {
+			notify(PhaseResolveRoutes)
+			resolveCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+			resolvedDomains, dwarns := m.resolveDomainsFn(resolveCtx, domains)
+			cancel()
+			warnings = append(warnings, dwarns...)
+			allPrefixes = dedupePrefixes(static, resolvedDomains)
+			if ctx.Err() != nil {
+				return nil, shared.NewUserError("canceled", "Cancelled", "Connection cancelled.")
+			}
+
+			// Re-persist the full set (static + resolved) into the profile so it
+			// survives the next connect. (For static-only lists the pre-dial sync
+			// already covered this.)
+			notify(PhaseSyncRoutes)
+			if err := m.syncRoutesFn(name, allPrefixes); err != nil {
+				log.Printf("ConnectFull: route sync skipped: %s Connection will continue; split tunnel routes may need to be re-saved.", shared.SanitizeOutput(err.Error()))
+				warnings = append(warnings, "Route sync skipped: "+shared.SanitizeOutput(err.Error())+". Connection will continue; split tunnel routes may need to be re-saved.")
+			}
+		}
+
 		notify(PhaseSplitEnforce)
-		if msg, eerr := EnforceSplitTunnel(name, prefixes); eerr != nil {
+		if msg, eerr := m.enforceSplitTunnelFn(name, allPrefixes); eerr != nil {
 			// best-effort; do not fail connect, but surface why split tunnel may be off
 			log.Printf("ConnectFull: split tunnel enforce: %s", shared.SanitizeOutput(eerr.Error()))
 			warnings = append(warnings, "Split tunnel not fully applied: "+shared.SanitizeOutput(eerr.Error()))
@@ -172,6 +205,22 @@ func (m *Manager) ConnectFull(ctx context.Context, req ConnectRequest, progress 
 
 	notify(PhaseDone)
 	return warnings, nil
+}
+
+// dedupePrefixes merges prefix lists, preserving order and dropping duplicates.
+func dedupePrefixes(lists ...[]string) []string {
+	seen := make(map[string]struct{})
+	var out []string
+	for _, list := range lists {
+		for _, p := range list {
+			if _, ok := seen[p]; ok {
+				continue
+			}
+			seen[p] = struct{}{}
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 // DisconnectFull disconnects the named connection.
@@ -207,6 +256,8 @@ func PhaseDetail(p Phase) string {
 		return "Syncing routes (split tunnel)…"
 	case PhaseDial:
 		return "Connecting to server…"
+	case PhaseResolveRoutes:
+		return "Resolving route domains…"
 	case PhaseSplitEnforce:
 		return "Enforcing split tunnel…"
 	case PhaseDisconnectOthers:

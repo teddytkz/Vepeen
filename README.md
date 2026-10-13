@@ -48,7 +48,7 @@ Vepeen does **not** create/update the Windows profile and does **not** set PSK. 
 | ----- | ------ |
 | `10.10.0.0/16` | Kept as that prefix |
 | `203.0.113.50` | Treated as `/32` |
-| `example.com` | Domain kept; **resolved to IPv4 /32s at connect** |
+| `example.com` | Domain kept; **resolved to IPv4 /32s after the VPN connects** (so VPN/split-DNS lookups work). A domain that still fails to resolve is a non-fatal warning. |
 | Blank lines | Ignored |
 | Lines starting with `#` | Comments (ignored) |
 | IPv6 / garbage | Rejected: **Line N is invalid** |
@@ -276,7 +276,7 @@ Facade: `internal/vpn` → `win` + `shared`. Non-Windows builds get stubs.
 6. Credentials survive restart when **Remember credentials** is on.
 7. Split mode: destinations only via VPN; status **Connected** + local IP when assigned.
 8. **Route All Traffic**: empty routes allowed; split tunneling disabled on profile.
-9. Domain line resolves at connect (or clear error if NXDOMAIN / no IPv4).
+9. Domain line resolves after the VPN connects (so split-DNS names work); a still-failing domain logs a warning but the VPN stays connected.
 10. Invalid line → **Line N is invalid** / **Cannot connect**.
 11. Connect while already connected → **Connected** (not error).
 12. **Cancel** during connect; **Disconnect**; quit shows disconnect dialog.
@@ -298,7 +298,7 @@ Remove-VpnConnection -Name "YourProfile" -Force
 | No profiles in dropdown | Create a Windows VPN connection first |
 | Cannot connect / auth failure | Username/password; if gateway needs PSK, set it on the **OS profile**. Check UDP **500/4500** |
 | Line N is invalid | IPv4, `x.x.x.x/nn`, or domain; no IPv6 |
-| Domain resolve error | DNS must return IPv4 at connect time |
+| Domain resolve warning | DNS must return IPv4 for the domain; resolution runs after the VPN connects, so split-DNS names work. The domain's routes are skipped, but the VPN stays connected. |
 | Split routes ignored / all traffic via VPN | Uncheck **Route All Traffic**; reconnect; check Log warnings; `Get-VpnConnection` / `Get-NetRoute` |
 | Route All Traffic not applied | Profile may reject split-tunnel toggle; try elevated once for profile property change |
 | NAT-T warning | Run elevated once so registry can be set; reboot may be required |

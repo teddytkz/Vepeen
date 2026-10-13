@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+### Fixed
+
+- [2026-10-13] **fix-024** Critical: split-tunnel domain routes were resolved BEFORE the VPN dialed, so domains served by the VPN's own DNS (split-DNS / internal zones) failed with "failed to resolve domain …" and aborted connect. `Manager.ConnectFull` (`internal/vpn/manager.go`) now dials first, then resolves domains post-dial; a domain that still fails is a **warning** (VPN stays connected), not a fatal error. New `route.SplitEntries` + `route.ResolveDomains` (`internal/route/parse.go`) split static IP/CIDR (synced pre-dial) from domains (resolved post-dial). Because Windows `Add-VpnConnectionRoute` only applies on the NEXT connect, `win.EnforceSplitTunnel` now takes `prefixes` and live-adds them to the connected interface via `New-NetRoute -PolicyStore ActiveStore` (`internal/vpn/win/profile_windows.go`, `win_exports_windows.go`). New phase `PhaseResolveRoutes`. Files: `internal/route/parse.go`, `internal/route/parse_test.go`, `internal/vpn/manager.go`, `internal/vpn/manager_test.go`, `internal/vpn/win/profile_windows.go`, `internal/vpn/win/profile_windows_test.go`, `internal/vpn/win_exports_windows.go`, `README.md`.
+
 ### Changed
 
 - [2026-07-24] **docs-002** Minor docs: add compact **Platform support** section to root `README.md` (matrix + macOS partial gaps + Linux stub gaps + Linux needs). Windows remains primary; do not claim macOS/Linux full support. Insert after Project layout, before Security notes. Plan: `docs/planning/docs-002-platform-support-notes.md`. Agent: Documentation → Debugger/Reviewer. Files: `README.md` only.
