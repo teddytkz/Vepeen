@@ -852,11 +852,22 @@ func (c *controller) syncIdentity() {
 		c.heroName.Text = "No profile selected"
 		c.heroSub.Text = "choose a profile to begin"
 	} else {
-		c.heroName.Text = name
 		if c.state == vpn.StatusConnected {
+			// While connected, show the VPN server address (the IP the tunnel
+			// points at) instead of the full profile name.
+			host := ""
+			if p, ok := c.profiles[name]; ok {
+				host = strings.TrimSpace(p.ServerAddress)
+			}
+			if host != "" {
+				c.heroName.Text = host
+			} else {
+				c.heroName.Text = name
+			}
 			// heroSub shows the VPN local IP/subnet once refreshLocalIP resolves it.
 			c.heroSub.Text = "L2TP/IPsec · connected"
 		} else {
+			c.heroName.Text = name
 			host := ""
 			if p, ok := c.profiles[name]; ok {
 				host = strings.TrimSpace(p.ServerAddress)
