@@ -65,10 +65,14 @@ func EnforceSplitTunnel(name string, prefixes []string) (string, error) {
 // prefix with New-NetRoute in the ActiveStore (so it is not persisted and does
 // not duplicate the profile routes; it disappears when the adapter goes down).
 func enforceSplitTunnelScript(name string, prefixes []string) string {
-	var add strings.Builder
+	var addIdx, addAlias strings.Builder
 	for _, p := range prefixes {
-		fmt.Fprintf(&add,
+		fmt.Fprintf(&addIdx,
 			"    New-NetRoute -InterfaceIndex $ifIndex -DestinationPrefix %s -PolicyStore ActiveStore -ErrorAction SilentlyContinue\n",
+			psQuote(p),
+		)
+		fmt.Fprintf(&addAlias,
+			"    New-NetRoute -InterfaceAlias $ifAlias -DestinationPrefix %s -PolicyStore ActiveStore -ErrorAction SilentlyContinue\n",
 			psQuote(p),
 		)
 	}
@@ -76,9 +80,10 @@ func enforceSplitTunnelScript(name string, prefixes []string) string {
 $name = %s
 try {
   $c = Get-VpnConnection -Name $name -ErrorAction SilentlyContinue
-  $ifAlias = if ($c -and $c.InterfaceAlias) { $c.InterfaceAlias } else { $name }
-  $ifIndex = if ($c -and $c.InterfaceIndex) { $c.InterfaceIndex } else { $null }
-  if ($ifIndex -ne $null) {
+  if (-not $c) { Write-Output 'connection-not-found'; exit 0 }
+  $ifAlias = if ($c.InterfaceAlias) { $c.InterfaceAlias } else { $name }
+  $ifIndex = $c.InterfaceIndex
+  if ($ifIndex) {
     $r = Get-NetRoute -InterfaceIndex $ifIndex -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue
     if ($r) {
       Remove-NetRoute -InterfaceIndex $ifIndex -DestinationPrefix '0.0.0.0/0' -Confirm:$false -ErrorAction SilentlyContinue
@@ -86,7 +91,7 @@ try {
     } else {
       'no-default'
     }
-%s  } else {
+%s  } elseif ($ifAlias) {
     $r = Get-NetRoute -InterfaceAlias $ifAlias -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue
     if ($r) {
       Remove-NetRoute -InterfaceAlias $ifAlias -DestinationPrefix '0.0.0.0/0' -Confirm:$false -ErrorAction SilentlyContinue
@@ -94,10 +99,12 @@ try {
     } else {
       'no-default'
     }
+%s  } else {
+    Write-Output 'no-interface-info'
   }
 } catch {
-  'enforce-error'
-}`, psQuote(name), add.String())
+  Write-Output "enforce-error: $($_.Exception.Message)"
+}`, psQuote(name), addIdx.String(), addAlias.String())
 }
 
 // ProfileDiagnostics returns a short status line: SplitTunneling on/off and route count.

@@ -117,14 +117,26 @@ func (m *Manager) ConnectFull(ctx context.Context, req ConnectRequest, progress 
 		return nil, shared.NewUserError("validation", "Cannot connect", "Enter at least one destination IP, CIDR, or domain name for split tunnel (e.g. 10.0.0.0/24 or example.com).")
 	}
 
-	// Split entries into static IP/CIDR prefixes (safe to sync pre-dial) and
-	// domain names (which must be resolved AFTER the tunnel is up, so the VPN's
-	// own DNS can answer split-DNS lookups).
-	static, domains := route.SplitEntries(prefixes)
+	// Resolve all domain entries to IP/CIDR prefixes BEFORE VPN dial.
+	// This works for domains resolvable via public DNS (like git-rbi.jatismobile.com).
+	// For split-DNS scenarios (domain only resolvable inside VPN), user must use IP directly.
+	var allPrefixes []string
+	if !req.RouteAllTraffic && len(prefixes) > 0 {
+		notify(PhaseResolveRoutes)
+		resolveCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		resolved, err := route.ResolveRoutes(resolveCtx, prefixes)
+		cancel()
+		if err != nil {
+			return nil, shared.NewUserError("validation", "Cannot connect", err.Error())
+		}
+		allPrefixes = resolved
+		if ctx.Err() != nil {
+			return nil, shared.NewUserError("canceled", "Cancelled", "Connection cancelled.")
+		}
+	}
 
 	notify(PhaseDisconnectOthers)
 	if _, derr := DisconnectAllExcept(name); derr != nil {
-		// best-effort; ignore so connect can proceed
 		_ = derr
 	}
 	if req.RouteAllTraffic {
@@ -140,13 +152,9 @@ func (m *Manager) ConnectFull(ctx context.Context, req ConnectRequest, progress 
 			warnings = append(warnings, "Failed to enable split tunnel: "+shared.SanitizeOutput(err.Error())+". Connection will continue; split tunnel routes may not be applied.")
 		}
 
-		// Sync static IP/CIDR routes pre-dial so they apply the moment the
-		// tunnel comes up (and any DNS server inside those subnets is reachable
-		// for the post-dial domain resolution below).
-		if len(static) > 0 {
+		if len(allPrefixes) > 0 {
 			notify(PhaseSyncRoutes)
-			if err := m.syncRoutesFn(name, static); err != nil {
-				// Best-effort: do not abort connect for a transient route-sync error.
+			if err := m.syncRoutesFn(name, allPrefixes); err != nil {
 				log.Printf("ConnectFull: route sync skipped: %s Connection will continue; split tunnel routes may need to be re-saved.", shared.SanitizeOutput(err.Error()))
 				warnings = append(warnings, "Route sync skipped: "+shared.SanitizeOutput(err.Error())+". Connection will continue; split tunnel routes may need to be re-saved.")
 			}
@@ -164,35 +172,9 @@ func (m *Manager) ConnectFull(ctx context.Context, req ConnectRequest, progress 
 		return nil, shared.NewUserError("canceled", "Cancelled", "Connection cancelled.")
 	}
 
-	allPrefixes := static
-	if !req.RouteAllTraffic {
-		// The tunnel is up: resolve domain entries now so the VPN's own DNS can
-		// answer split-DNS lookups. A domain that still fails is a warning, not
-		// a fatal error — the working tunnel is kept.
-		if len(domains) > 0 {
-			notify(PhaseResolveRoutes)
-			resolveCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
-			resolvedDomains, dwarns := m.resolveDomainsFn(resolveCtx, domains)
-			cancel()
-			warnings = append(warnings, dwarns...)
-			allPrefixes = dedupePrefixes(static, resolvedDomains)
-			if ctx.Err() != nil {
-				return nil, shared.NewUserError("canceled", "Cancelled", "Connection cancelled.")
-			}
-
-			// Re-persist the full set (static + resolved) into the profile so it
-			// survives the next connect. (For static-only lists the pre-dial sync
-			// already covered this.)
-			notify(PhaseSyncRoutes)
-			if err := m.syncRoutesFn(name, allPrefixes); err != nil {
-				log.Printf("ConnectFull: route sync skipped: %s Connection will continue; split tunnel routes may need to be re-saved.", shared.SanitizeOutput(err.Error()))
-				warnings = append(warnings, "Route sync skipped: "+shared.SanitizeOutput(err.Error())+". Connection will continue; split tunnel routes may need to be re-saved.")
-			}
-		}
-
+	if !req.RouteAllTraffic && len(allPrefixes) > 0 {
 		notify(PhaseSplitEnforce)
 		if msg, eerr := m.enforceSplitTunnelFn(name, allPrefixes); eerr != nil {
-			// best-effort; do not fail connect, but surface why split tunnel may be off
 			log.Printf("ConnectFull: split tunnel enforce: %s", shared.SanitizeOutput(eerr.Error()))
 			warnings = append(warnings, "Split tunnel not fully applied: "+shared.SanitizeOutput(eerr.Error()))
 		} else if msg != "" {
