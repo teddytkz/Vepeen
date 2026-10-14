@@ -55,8 +55,8 @@ type Manager struct {
 	ensureSplitTunnelingFn func(string) error
 	// disableSplitTunnelingFn disables split tunneling on the profile; overridable for tests.
 	disableSplitTunnelingFn func(string) error
-	// resolveDomainsFn resolves domain route entries post-dial; overridable for tests.
-	resolveDomainsFn func(context.Context, []string) ([]string, []string)
+	// resolveRoutesFn resolves domain route entries to IP/CIDR prefixes pre-dial; overridable for tests.
+	resolveRoutesFn func(context.Context, []string) ([]string, []string, error)
 	// enforceSplitTunnelFn applies split tunnel to the live connection; overridable for tests.
 	enforceSplitTunnelFn func(string, []string) (string, error)
 }
@@ -69,7 +69,7 @@ func NewManager() *Manager {
 		natCheckFn:              EnsureNATRegistry,
 		ensureSplitTunnelingFn:  EnsureSplitTunneling,
 		disableSplitTunnelingFn: DisableSplitTunneling,
-		resolveDomainsFn:        route.ResolveDomains,
+		resolveRoutesFn:         route.ResolveRoutesDetail,
 		enforceSplitTunnelFn:    EnforceSplitTunnel,
 	}
 }
@@ -124,12 +124,14 @@ func (m *Manager) ConnectFull(ctx context.Context, req ConnectRequest, progress 
 	if !req.RouteAllTraffic && len(prefixes) > 0 {
 		notify(PhaseResolveRoutes)
 		resolveCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-		resolved, err := route.ResolveRoutes(resolveCtx, prefixes)
+		resolved, notes, err := m.resolveRoutesFn(resolveCtx, prefixes)
 		cancel()
 		if err != nil {
 			return nil, shared.NewUserError("validation", "Cannot connect", err.Error())
 		}
 		allPrefixes = resolved
+		// Surface domain→IP injections in the activity log.
+		warnings = append(warnings, notes...)
 		if ctx.Err() != nil {
 			return nil, shared.NewUserError("canceled", "Cancelled", "Connection cancelled.")
 		}
