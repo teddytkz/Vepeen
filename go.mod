@@ -1,6 +1,6 @@
 module vepeen
 
-go 1.22.0
+go 1.27.3
 
 require (
 	fyne.io/fyne/v2 v2.8.0

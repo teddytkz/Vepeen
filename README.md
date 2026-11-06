@@ -1,6 +1,6 @@
 # Vepeen
 
-Windows desktop client for **existing** OS VPN profiles (Go 1.22 + Fyne v2.8). Select a profile, optional username/password, global split-tunnel destinations **or Route All Traffic**, then connect/disconnect via `rasdial` + `VpnClient` PowerShell. Does **not** create L2TP profiles or set PSK.
+Windows desktop client for **existing** OS VPN profiles (Go 1.27 + Fyne v2.8). Select a profile, optional username/password, global split-tunnel destinations **or Route All Traffic**, then connect/disconnect via `rasdial` + `VpnClient` PowerShell. Does **not** create L2TP profiles or set PSK.
 
 **Last updated:** 2026-07-24
 
@@ -68,7 +68,7 @@ intranet.example.com
 | ----------- | ----- |
 | **Windows 10/11** | `VpnClient` module + `rasdial.exe` |
 | **Existing VPN profile** | Create L2TP (or other) profile in Windows first |
-| **Go 1.22+** | Module targets `1.22.0` |
+| **Go 1.27+** | Module targets `1.27.3` |
 | **C compiler (CGo)** | Fyne needs GCC on `PATH` (MSYS2 MinGW-w64 recommended) |
 | **CGO enabled** | `go env CGO_ENABLED` → `1` |
 

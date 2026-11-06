@@ -233,9 +233,8 @@ func (c *controller) build() fyne.CanvasObject {
 		c.userEntry,
 		c.passEntry,
 		c.rememberCheck,
-		helperText("Leave blank to use credentials saved in Keychain."),
+		helperText("Leave blank to use credentials saved in the OS profile."),
 	))
-	cardCreds.Hide() // ponytail: L2TP profiles use Windows Credential Manager. Unhide if manual override needed.
 
 	c.routesEntry = widget.NewMultiLineEntry()
 	c.routesEntry.SetMinRowsVisible(6)
@@ -257,7 +256,7 @@ func (c *controller) build() fyne.CanvasObject {
 	))
 
 	leftCol := container.NewBorder(
-		cardProfile,
+		container.NewVBox(cardProfile, cardCreds),
 		nil, nil, nil,
 		cardRoutes,
 	)
