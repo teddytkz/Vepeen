@@ -44,6 +44,9 @@ func main() {
 	// Listen for show signals from a second instance launch (tray-hidden window).
 	ui.ListenForShowSignal(w)
 
+	// Re-fit scale/size/position when the display changes (e.g. after RDP).
+	ui.WatchDisplayChanges(a, w)
+
 	// When launched via the Run on Startup registry entry (--autostart flag),
 	// start hidden to tray. CenterOnScreen pre-registers centering for the
 	// first real Show(); Hide() before window creation is a safe no-op
